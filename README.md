@@ -1,5 +1,3 @@
-🇬🇧 English · 🇫🇷 [Français](README.fr.md)
-
 # Git-Push
 
 **A full Git client in your pocket, with an AI agent that edits your code for you.**
