@@ -1,8 +1,10 @@
-# GitCrush
+🇬🇧 English · 🇫🇷 [Français](README.fr.md)
+
+# Git-Push
 
 **A full Git client in your pocket, with an AI agent that edits your code for you.**
 
-GitCrush is an Android app (Expo / React Native) that clones your repositories straight onto your phone, lets you edit, sync and publish them — no computer needed. An AI agent (Gemini, GPT or Claude, using your own API key) can read the project, edit files, create new repositories, write GitHub Actions workflows and automatically fix a failing build.
+Git-Push is an Android app (Expo / React Native) that clones your repositories straight onto your phone, lets you edit, sync and publish them — no computer needed. An AI agent (Gemini, GPT or Claude, using your own API key) can read the project, edit files, create new repositories, write GitHub Actions workflows and automatically fix a failing build.
 
 > The whole Git engine runs **on the phone** (isomorphic-git). No middleman server: the app talks directly to GitHub, GitLab or Gitea, and to your AI provider.
 
@@ -43,7 +45,7 @@ Français, English, Español, 中文, Русский.
 
 ### Option A — Download the APK (easiest)
 1. Open the **Releases** tab of this repository on your phone.
-2. Download `GitPush-release-N.apk` from the latest release.
+2. Download `Git-Push-release-N.apk` from the latest release.
 3. Open it and allow installation from this source if Android asks.
 
 ### Option B — Build the APK yourself on GitHub (no computer)
@@ -82,7 +84,7 @@ npm test                 # unit tests (Node 22.6+)
 ## Privacy and security
 
 - Your **GitHub tokens, AI API keys, passwords and account tokens** are kept in the phone's **secure vault** (Android Keystore), never in plain text. Older installs are migrated automatically.
-- No telemetry and no GitCrush server: the app sends nothing to its author.
+- No telemetry and no Git-Push server: the app sends nothing to its author.
 - **What goes to the AI provider**: the files the assistant reads and the diffs, only when you use AI. On a free quota, the provider may use this data to improve its products. **Do not use AI on repositories that contain secrets.**
 - The accessibility service (sync when other apps open) is optional, off by default, and never reads screen content.
 
