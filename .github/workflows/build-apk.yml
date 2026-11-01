@@ -225,7 +225,8 @@ jobs:
           # Avec une version (v1.2.3) : release « propre » avec notes générées. Sinon : tag build-N.
           tag_name: ${{ inputs.tag || format('build-{0}', github.run_number) }}
           target_commitish: ${{ github.sha }}
-          name: Git-Push ${{ inputs.tag || format('{0} #{1}', env.BUILD_TYPE, github.run_number) }}
+          # Entre guillemets : sans eux, le « # » ci-dessous serait pris pour un commentaire YAML et couperait l'expression.
+          name: "Git-Push ${{ inputs.tag || format('{0} #{1}', env.BUILD_TYPE, github.run_number) }}"
           generate_release_notes: ${{ inputs.tag != '' }}
           prerelease: ${{ inputs.prerelease || contains(inputs.tag, '-') }}
           body: |
