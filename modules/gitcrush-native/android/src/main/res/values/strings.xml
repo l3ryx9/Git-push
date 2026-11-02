@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="gitcrush_tile_label">Git-Push Sync</string>
+  <string name="gitcrush_widget_label">Git-Push Sync</string>
+  <string name="gitcrush_widget_title">Git-Push</string>
+  <string name="gitcrush_widget_description">Tap to sync all your repositories</string>
+  <string name="gitcrush_widget_never">Tap to sync</string>
+  <string name="gitcrush_widget_ok">Synced at %1$s</string>
+  <string name="gitcrush_widget_failed">Sync failed at %1$s</string>
+  <string name="gitcrush_accessibility_label">Git-Push app sync</string>
+  <string name="gitcrush_accessibility_description">Git-Push uses this service only to detect which app is in the foreground (its package name), so it can start a Git sync when you open or leave the apps you chose. It does not read the screen content or what you type, does not collect any personal data and sends nothing anywhere.</string>
+</resources>
