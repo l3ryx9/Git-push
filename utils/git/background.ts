@@ -27,8 +27,22 @@ try {
   console.warn("[Git-Push] définition de la tâche d'arrière-plan impossible", e);
 }
 
-/** (Ré)enregistre la tâche selon les réglages des conteneurs. */
-export async function refreshBackgroundSchedule(): Promise<void> {
+/** Intervalle actuellement enregistré auprès du système (null : inconnu depuis le lancement). */
+let registeredMinutes: number | null = null;
+let chain: Promise<void> = Promise.resolve();
+
+/**
+ * (Ré)enregistre la tâche selon les réglages des conteneurs.
+ * Appelée après chaque synchro : on ne touche au planificateur QUE si l'intervalle
+ * change (désinscrire / réinscrire à chaque fois remettait le compte à rebours à zéro,
+ * si bien qu'une synchro planifiée pouvait ne jamais se déclencher).
+ */
+export function refreshBackgroundSchedule(): Promise<void> {
+  chain = chain.then(applySchedule, applySchedule);
+  return chain;
+}
+
+async function applySchedule(): Promise<void> {
   try {
     const list = await loadContainers();
     const scheduled = list.filter((c) => c.sync.scheduled);
@@ -36,11 +50,14 @@ export async function refreshBackgroundSchedule(): Promise<void> {
     const registered = await TaskManager.isTaskRegisteredAsync(SYNC_TASK);
     if (!needed) {
       if (registered) await BackgroundTask.unregisterTaskAsync(SYNC_TASK);
+      registeredMinutes = null;
       return;
     }
     const minutes = Math.max(15, Math.min(...(scheduled.length ? scheduled.map((c) => c.sync.intervalMin) : [30])));
+    if (registered && registeredMinutes === minutes) return;
     if (registered) await BackgroundTask.unregisterTaskAsync(SYNC_TASK);
     await BackgroundTask.registerTaskAsync(SYNC_TASK, { minimumInterval: minutes });
+    registeredMinutes = minutes;
   } catch (e) {
     console.warn("[Git-Push] planification impossible", e);
   }

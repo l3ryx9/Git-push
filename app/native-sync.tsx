@@ -12,6 +12,8 @@ import { useRepos } from "@/context/ReposContext";
 import { useColors } from "@/hooks/useColors";
 import { showAlert, showConfirm } from "@/utils/dialogs";
 import { getWatchRules, Native, saveWatchRules, type WatchRule } from "@/utils/native";
+import { C } from "@/constants/colors";
+import { showToast } from "@/utils/toast";
 
 const ALL = "__all__";
 
@@ -66,8 +68,8 @@ export default function NativeSyncScreen() {
     if (!Native) return;
     try {
       const code = await Native.requestAddTile();
-      if (code === 2) showAlert(t("n.tile.title"), t("n.tile.added"));
-      else if (code === 1) showAlert(t("n.tile.title"), t("n.tile.already"));
+      if (code === 2) showToast(t("n.tile.added"), "success", t("n.tile.title"));
+      else if (code === 1) showToast(t("n.tile.already"), "info", t("n.tile.title"));
       else if (code === -1 || code >= 1000) showAlert(t("n.tile.title"), t("n.tile.manual"));
     } catch {
       showAlert(t("n.tile.title"), t("n.tile.manual"));
@@ -162,8 +164,8 @@ export default function NativeSyncScreen() {
             <Card style={{ padding: 14, gap: 10 }}>
               <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>{t("n.acc.desc")}</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <Feather name={enabled ? "check-circle" : "alert-circle"} size={16} color={enabled ? colors.accent : "#e3b341"} />
-                <Text style={{ flex: 1, color: enabled ? colors.accent : "#e3b341", fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
+                <Feather name={enabled ? "check-circle" : "alert-circle"} size={16} color={enabled ? colors.accent : C.warning} />
+                <Text style={{ flex: 1, color: enabled ? colors.accent : C.warning, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
                   {enabled ? t("n.acc.on") : t("n.acc.off")}
                 </Text>
               </View>

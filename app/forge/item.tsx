@@ -23,6 +23,7 @@ import {
   type ItemDetail,
   type Kind,
 } from "@/utils/forge";
+import { C } from "@/constants/colors";
 
 export default function ForgeItemScreen() {
   const ref = useForgeRef();
@@ -150,7 +151,7 @@ export default function ForgeItemScreen() {
                         </Text>
                         {f.additions !== undefined ? (
                           <Text style={{ fontFamily: MONO, fontSize: 11 }}>
-                            <Text style={{ color: "#56d364" }}>+{f.additions}</Text> <Text style={{ color: "#f85149" }}>−{f.deletions}</Text>
+                            <Text style={{ color: C.diffAdd }}>+{f.additions}</Text> <Text style={{ color: C.diffDel }}>−{f.deletions}</Text>
                           </Text>
                         ) : (
                           <Text style={{ color: colors.mutedForeground, fontSize: 11 }}>{f.status}</Text>

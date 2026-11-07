@@ -11,6 +11,7 @@ import { useRepos } from "@/context/ReposContext";
 import { useColors } from "@/hooks/useColors";
 import * as engine from "@/utils/git/engine";
 import type { Change } from "@/utils/git/engine";
+import { C } from "@/constants/colors";
 
 type Info = Awaited<ReturnType<typeof engine.readCommit>>;
 
@@ -41,7 +42,7 @@ export default function CommitScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, oid]);
 
-  const color = (k: Change["kind"]) => (k === "added" ? colors.accent : k === "deleted" ? colors.destructive : "#e3b341");
+  const color = (k: Change["kind"]) => (k === "added" ? colors.accent : k === "deleted" ? colors.destructive : C.warning);
   const icon = (k: Change["kind"]) => (k === "added" ? "plus-circle" : k === "deleted" ? "minus-circle" : "edit-3");
 
   return (

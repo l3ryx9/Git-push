@@ -286,6 +286,36 @@ export async function fetchRemote(ctx: GitCtx, remote = ctx.remote) {
   });
 }
 
+/**
+ * Fetch limité à la branche courante (synchronisation) : beaucoup moins de
+ * données à négocier et à télécharger qu'un fetch de toutes les branches.
+ * Branche absente du serveur (jamais poussée) : repli sur le fetch complet.
+ */
+async function fetchBranch(ctx: GitCtx, branch: string) {
+  try {
+    return await git.fetch({
+      fs,
+      http: httpFor(ctx),
+      dir: ctx.dir,
+      remote: ctx.remote,
+      ref: branch,
+      singleBranch: true,
+      tags: false,
+      cache: cacheFor(ctx.dir),
+      ...remoteOpts(ctx),
+    });
+  } catch (e: any) {
+    if (isNetworkError(e) || e?.code === "HttpError" || e?.code === "UserCanceledError") throw e;
+    return fetchRemote(ctx);
+  }
+}
+
+/** Le push a-t-il été refusé parce que le serveur a avancé entre-temps ? */
+function isStaleRemote(e: any): boolean {
+  const msg = String(e?.message ?? e).toLowerCase();
+  return e?.code === "PushRejectedError" && /fast.?forward|fetch first|rejected|failed to update|stale/.test(msg);
+}
+
 export async function pushRemote(
   ctx: GitCtx,
   branch: string,
@@ -555,25 +585,39 @@ export async function syncRepo(
     }
   }
 
-  ctx.onProgress?.({ phase: "fetch", loaded: 0 });
-  await fetchRemote(ctx);
-  const outcome = await mergeInto(ctx, `refs/remotes/${ctx.remote}/${branch}`, `${ctx.remote}/${branch}`);
-  if (outcome.kind === "conflict") {
-    return {
-      summary: { committed, pulled: "conflict", pushed: false, conflicts: outcome.merge.conflicts },
-      merge: outcome.merge,
-    };
-  }
-
-  const local = await resolveOrNull(dir, `refs/heads/${branch}`);
-  const upstream = await resolveOrNull(dir, `refs/remotes/${ctx.remote}/${branch}`);
+  const remoteRef = `refs/remotes/${ctx.remote}/${branch}`;
+  const label = `${ctx.remote}/${branch}`;
+  let pulled: SyncSummary["pulled"] = "uptodate";
   let pushed = false;
-  if (local && local !== upstream) {
+
+  // Deux passes au plus : si quelqu'un pousse pendant notre synchro, le push est refusé ;
+  // on récupère alors la nouvelle tête, on fusionne et on renvoie (au lieu d'échouer).
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.onProgress?.({ phase: "fetch", loaded: 0 });
+    await fetchBranch(ctx, branch);
+    const outcome = await mergeInto(ctx, remoteRef, label);
+    if (outcome.kind === "conflict") {
+      return {
+        summary: { committed, pulled: "conflict", pushed: false, conflicts: outcome.merge.conflicts },
+        merge: outcome.merge,
+      };
+    }
+    if (outcome.kind !== "uptodate") pulled = outcome.kind;
+
+    const local = await resolveOrNull(dir, `refs/heads/${branch}`);
+    const upstream = await resolveOrNull(dir, remoteRef);
+    if (!local || local === upstream) break;
     ctx.onProgress?.({ phase: "push", loaded: 0 });
-    await pushRemote(ctx, branch);
-    pushed = true;
+    try {
+      await pushRemote(ctx, branch);
+      pushed = true;
+      break;
+    } catch (e) {
+      if (pass === 0 && isStaleRemote(e)) continue;
+      throw e;
+    }
   }
-  return { summary: { committed, pulled: outcome.kind, pushed, conflicts: [] } };
+  return { summary: { committed, pulled, pushed, conflicts: [] } };
 }
 
 export async function aheadBehind(
@@ -586,6 +630,10 @@ export async function aheadBehind(
   if (!up) return { ahead: local ? -1 : 0, behind: 0, upstream: false };
   if (!local) return { ahead: 0, behind: -1, upstream: true };
   if (local === up) return { ahead: 0, behind: 0, upstream: true };
+  // Le résultat ne dépend que des deux commits : inutile de reparcourir l'historique à chaque affichage.
+  const memoKey = `${dir}|${local}|${up}`;
+  const known = abMemo.get(memoKey);
+  if (known) return known;
   const cache = cacheFor(dir);
   const safeLog = async (ref: string) => {
     try {
@@ -597,12 +645,17 @@ export async function aheadBehind(
   const [l, r] = await Promise.all([safeLog(local), safeLog(up)]);
   const ls = new Set(l.map((c) => c.oid));
   const rs = new Set(r.map((c) => c.oid));
-  return {
+  const res = {
     ahead: l.filter((c) => !rs.has(c.oid)).length,
     behind: r.filter((c) => !ls.has(c.oid)).length,
     upstream: true,
   };
+  if (abMemo.size > 200) abMemo.clear();
+  abMemo.set(memoKey, res);
+  return res;
 }
+
+const abMemo = new Map<string, { ahead: number; behind: number; upstream: boolean }>();
 
 // ─── Historique / diffs ───────────────────────────────────────────────────────
 

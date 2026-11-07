@@ -1,8 +1,12 @@
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
+  AccessibilityInfo,
   ActivityIndicator,
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -11,6 +15,8 @@ import {
   Text,
   TextInput,
   View,
+  type GestureResponderEvent,
+  type PressableProps,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -19,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { isNetworkError } from "@/utils/git/engine";
 import type { Container } from "@/utils/git/store";
+import { C, withAlpha } from "@/constants/colors";
 
 export const MONO = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });
 
@@ -50,6 +57,8 @@ export function describeError(e: any, t: T): string {
       return t("g.err.containerNotFound");
     case "NativeUnavailable":
       return t("g.err.nativeUnavailable");
+    case "InsecureTransport":
+      return t("g.err.insecureTransport");
     case "HttpError": {
       const s = Number(e?.data?.statusCode);
       if (s === 401 || s === 403) return t("g.err.auth");
@@ -75,6 +84,116 @@ export function timeAgo(ms: number, t: T): string {
   return t("g.time.day", { n: Math.floor(hrs / 24) });
 }
 
+/** Retour haptique léger (ignoré si indisponible). */
+export function tapFeedback() {
+  Haptics.selectionAsync().catch(() => undefined);
+}
+
+let reduceMotion = false;
+AccessibilityInfo.isReduceMotionEnabled?.()
+  .then((v: boolean) => {
+    reduceMotion = !!v;
+  })
+  .catch(() => undefined);
+
+/**
+ * Zone appuyable qui « s'enfonce » légèrement (ressort natif, 60 i/s même si le
+ * JavaScript est occupé). `style` s'applique au conteneur (mise en page),
+ * `contentStyle` à la zone appuyable elle-même.
+ */
+export function PressableScale({
+  style,
+  contentStyle,
+  scaleTo = 0.97,
+  haptic,
+  onPressIn,
+  onPressOut,
+  onPress,
+  children,
+  ...rest
+}: Omit<PressableProps, "style" | "children"> & {
+  style?: StyleProp<ViewStyle>;
+  contentStyle?: StyleProp<ViewStyle> | ((s: { pressed: boolean }) => StyleProp<ViewStyle>);
+  scaleTo?: number;
+  haptic?: boolean;
+  children?: React.ReactNode;
+}) {
+  const [scale] = useState(() => new Animated.Value(1));
+  const animate = (to: number, spring: boolean) => {
+    if (reduceMotion) return;
+    if (spring) Animated.spring(scale, { toValue: to, useNativeDriver: true, speed: 28, bounciness: 7 }).start();
+    else Animated.timing(scale, { toValue: to, duration: 90, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+  };
+  return (
+    <Animated.View style={[style, { transform: [{ scale }] }]}>
+      <Pressable
+        {...rest}
+        onPressIn={(e: GestureResponderEvent) => {
+          animate(scaleTo, false);
+          onPressIn?.(e);
+        }}
+        onPressOut={(e: GestureResponderEvent) => {
+          animate(1, true);
+          onPressOut?.(e);
+        }}
+        onPress={(e: GestureResponderEvent) => {
+          if (haptic) tapFeedback();
+          onPress?.(e);
+        }}
+        style={contentStyle as any}
+      >
+        {children}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+/** Bloc de chargement animé (remplace un simple indicateur qui tourne). */
+export function Skeleton({ height = 14, width = "100%", radius = 8, style }: { height?: number; width?: number | `${number}%`; radius?: number; style?: StyleProp<ViewStyle> }) {
+  const colors = useColors();
+  const [pulse] = useState(() => new Animated.Value(0.45));
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.45, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  return <Animated.View style={[{ height, width, borderRadius: radius, backgroundColor: colors.secondary, opacity: pulse }, style]} />;
+}
+
+/** Carte fantôme d'une liste en cours de chargement. */
+export function SkeletonRow() {
+  const colors = useColors();
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: colors.radius, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}>
+      <Skeleton width={38} height={38} radius={colors.radiusSm} />
+      <View style={{ flex: 1, gap: 7 }}>
+        <Skeleton width="55%" height={13} />
+        <Skeleton width="80%" height={10} />
+      </View>
+    </View>
+  );
+}
+
+/** Petite pastille d'état (branche, compteur, statut). */
+export function Badge({ label, color, icon }: { label: string; color?: string; icon?: React.ComponentProps<typeof Feather>["name"] }) {
+  const colors = useColors();
+  const c = color ?? colors.mutedForeground;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: withAlpha(c.startsWith("#") ? c : "#8aa097", 0.13) }}>
+      {icon ? <Feather name={icon} size={10} color={c} /> : null}
+      <Text style={{ color: c, fontSize: 11, fontFamily: "Inter_600SemiBold" }} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
 export function ScreenHeader({
   title,
   subtitle,
@@ -96,33 +215,36 @@ export function ScreenHeader({
       style={{
         flexDirection: "row",
         alignItems: "center",
-        gap: 8,
-        paddingTop: insets.top + 6,
-        paddingBottom: 10,
-        paddingHorizontal: 8,
-        borderBottomWidth: 1,
+        gap: 10,
+        paddingTop: insets.top + 8,
+        paddingBottom: 12,
+        paddingHorizontal: 10,
+        borderBottomWidth: StyleSheet.hairlineWidth,
         borderColor: colors.border,
         // Transparent : le fond stylisé de l'écran reste visible derrière l'en-tête.
         backgroundColor: "transparent",
       }}
     >
       {noBack ? (
-        <View style={{ width: 8 }} />
+        <View style={{ width: 6 }} />
       ) : (
-        <Pressable
+        <PressableScale
           hitSlop={10}
+          scaleTo={0.9}
+          accessibilityRole="button"
+          accessibilityLabel="Retour"
           onPress={onBack ?? (() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/repos" as any)))}
-          style={({ pressed }) => [{ padding: 6 }, pressed && { opacity: 0.6 }]}
+          contentStyle={{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colors.secondary }}
         >
-          <Feather name="arrow-left" size={20} color={colors.foreground} />
-        </Pressable>
+          <Feather name="arrow-left" size={19} color={colors.foreground} />
+        </PressableScale>
       )}
       <View style={{ flex: 1 }}>
-        <Text numberOfLines={1} style={{ color: colors.foreground, fontSize: 17, fontFamily: "Inter_700Bold" }}>
+        <Text numberOfLines={1} accessibilityRole="header" style={{ color: colors.foreground, fontSize: 18, fontFamily: "Inter_700Bold", letterSpacing: -0.2 }}>
           {title}
         </Text>
         {subtitle ? (
-          <Text numberOfLines={1} style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: "Inter_400Regular" }}>
+          <Text numberOfLines={1} style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 }}>
             {subtitle}
           </Text>
         ) : null}
@@ -137,22 +259,30 @@ export function IconBtn({
   onPress,
   color,
   disabled,
+  label,
 }: {
   icon: React.ComponentProps<typeof Feather>["name"];
   onPress: () => void;
   color?: string;
   disabled?: boolean;
+  /** Texte lu par le lecteur d'écran. */
+  label?: string;
 }) {
   const colors = useColors();
   return (
-    <Pressable
+    <PressableScale
       hitSlop={8}
+      scaleTo={0.88}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [{ padding: 7, opacity: disabled ? 0.35 : 1 }, pressed && { opacity: 0.6 }]}
+      accessibilityRole="button"
+      accessibilityLabel={label ?? icon}
+      accessibilityState={{ disabled: !!disabled }}
+      style={{ opacity: disabled ? 0.35 : 1 }}
+      contentStyle={({ pressed }) => [{ padding: 8, borderRadius: 18 }, pressed && { backgroundColor: colors.secondary }]}
     >
       <Feather name={icon} size={19} color={color ?? colors.foreground} />
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -179,14 +309,15 @@ export function Card({ children, style }: { children: React.ReactNode; style?: S
 export function SectionTitle({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
   const colors = useColors();
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", marginTop: 18, marginBottom: 8, paddingHorizontal: 4 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", marginTop: 22, marginBottom: 8, paddingHorizontal: 4 }}>
       <Text
+        accessibilityRole="header"
         style={{
           flex: 1,
-          fontSize: 11,
+          fontSize: 12,
           color: colors.mutedForeground,
           fontFamily: "Inter_600SemiBold",
-          letterSpacing: 0.8,
+          letterSpacing: 0.4,
         }}
       >
         {children}
@@ -217,39 +348,44 @@ export function Btn({
 }) {
   const colors = useColors();
   const bg =
-    variant === "primary" ? colors.primary : variant === "danger" ? "#2a0d0d" : variant === "ghost" ? "transparent" : colors.secondary;
-  const fg = variant === "primary" ? "#000" : variant === "danger" ? colors.destructive : colors.foreground;
+    variant === "primary" ? colors.primary : variant === "danger" ? colors.destructiveBg : variant === "ghost" ? "transparent" : colors.secondary;
+  const fg = variant === "primary" ? colors.primaryForeground : variant === "danger" ? colors.destructive : colors.foreground;
+  const border = variant === "danger" ? withAlpha("#ff6b6b", 0.35) : colors.border;
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
+      haptic
       disabled={disabled || loading}
-      style={({ pressed }) => [
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!(disabled || loading), busy: !!loading }}
+      style={[{ opacity: disabled ? 0.4 : 1 }, style]}
+      contentStyle={({ pressed }) => [
         {
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
-          gap: 7,
+          gap: 8,
           backgroundColor: bg,
-          borderRadius: colors.radius,
-          borderWidth: variant === "secondary" || variant === "ghost" ? 1 : 0,
-          borderColor: colors.border,
-          paddingHorizontal: small ? 10 : 14,
-          paddingVertical: small ? 7 : 11,
-          opacity: disabled ? 0.4 : 1,
+          borderRadius: colors.radiusSm + 2,
+          borderWidth: variant === "primary" ? 0 : 1,
+          borderColor: border,
+          paddingHorizontal: small ? 12 : 16,
+          minHeight: small ? 34 : 46,
+          paddingVertical: small ? 6 : 10,
         },
-        pressed && { opacity: 0.75 },
-        style,
+        pressed && { opacity: 0.85 },
       ]}
     >
       {loading ? (
         <ActivityIndicator size="small" color={fg} />
       ) : icon ? (
-        <Feather name={icon} size={small ? 13 : 15} color={fg} />
+        <Feather name={icon} size={small ? 14 : 16} color={fg} />
       ) : null}
-      <Text style={{ color: fg, fontSize: small ? 12 : 13, fontFamily: "Inter_700Bold" }} numberOfLines={1}>
+      <Text style={{ color: fg, fontSize: small ? 12.5 : 14, fontFamily: "Inter_600SemiBold" }} numberOfLines={1}>
         {label}
       </Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -273,37 +409,43 @@ export function NavRow({
   last?: boolean;
 }) {
   const colors = useColors();
+  const tint = danger ? colors.destructive : colors.accent;
   return (
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
+      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel={value ? `${label}, ${value}` : label}
       style={({ pressed }) => [
         {
           flexDirection: "row",
           alignItems: "center",
           gap: 12,
           paddingHorizontal: 14,
-          paddingVertical: 13,
-          borderBottomWidth: last ? 0 : 1,
+          paddingVertical: 12,
+          minHeight: 52,
+          borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
           borderColor: colors.border,
         },
         pressed && onPress && { backgroundColor: colors.secondary },
       ]}
     >
-      <Feather name={icon} size={16} color={danger ? colors.destructive : colors.mutedForeground} />
+      <View style={{ width: 30, height: 30, borderRadius: 9, alignItems: "center", justifyContent: "center", backgroundColor: withAlpha(danger ? "#ff6b6b" : "#4be08f", 0.1) }}>
+        <Feather name={icon} size={15} color={tint} />
+      </View>
       <Text
         numberOfLines={1}
-        style={{ flex: 1, color: danger ? colors.destructive : colors.foreground, fontSize: 14, fontFamily: "Inter_500Medium" }}
+        style={{ flex: 1, color: danger ? colors.destructive : colors.foreground, fontSize: 14.5, fontFamily: "Inter_500Medium" }}
       >
         {label}
       </Text>
       {right ??
         (value ? (
-          <Text numberOfLines={1} style={{ color: colors.mutedForeground, fontSize: 12, maxWidth: "45%", fontFamily: "Inter_400Regular" }}>
+          <Text numberOfLines={1} style={{ color: colors.mutedForeground, fontSize: 12.5, maxWidth: "45%", fontFamily: "Inter_400Regular" }}>
             {value}
           </Text>
         ) : null)}
-      {onPress && !right ? <Feather name="chevron-right" size={14} color={colors.mutedForeground} /> : null}
+      {onPress && !right ? <Feather name="chevron-right" size={15} color={colors.mutedForeground} /> : null}
     </Pressable>
   );
 }
@@ -311,11 +453,13 @@ export function NavRow({
 export function Empty({ icon, text, hint }: { icon: React.ComponentProps<typeof Feather>["name"]; text: string; hint?: string }) {
   const colors = useColors();
   return (
-    <View style={{ alignItems: "center", padding: 32, gap: 8 }}>
-      <Feather name={icon} size={26} color={colors.mutedForeground} />
-      <Text style={{ color: colors.mutedForeground, fontSize: 13, fontFamily: "Inter_600SemiBold", textAlign: "center" }}>{text}</Text>
+    <View style={{ alignItems: "center", paddingVertical: 36, paddingHorizontal: 24, gap: 10 }}>
+      <View style={{ width: 56, height: 56, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colors.greenBg }}>
+        <Feather name={icon} size={24} color={colors.accent} />
+      </View>
+      <Text style={{ color: colors.foreground, fontSize: 15, fontFamily: "Inter_600SemiBold", textAlign: "center" }}>{text}</Text>
       {hint ? (
-        <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center" }}>{hint}</Text>
+        <Text style={{ color: colors.mutedForeground, fontSize: 13, lineHeight: 19, fontFamily: "Inter_400Regular", textAlign: "center", maxWidth: 320 }}>{hint}</Text>
       ) : null}
     </View>
   );
@@ -341,39 +485,62 @@ export function Field({
   hint?: string;
 }) {
   const colors = useColors();
+  const [focused, setFocused] = useState(false);
+  const [reveal, setReveal] = useState(false);
   return (
-    <View style={{ marginBottom: 12 }}>
-      <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.6, marginBottom: 6 }}>
-        {label}
-      </Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.mutedForeground}
-        secureTextEntry={secure}
-        multiline={multiline}
-        keyboardType={keyboardType}
-        autoCapitalize="none"
-        autoCorrect={false}
+    <View style={{ marginBottom: 14 }}>
+      <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 6 }}>{label}</Text>
+      <View
         style={{
+          flexDirection: "row",
+          alignItems: multiline ? "flex-start" : "center",
           backgroundColor: colors.input,
           borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: colors.radius,
-          color: colors.foreground,
-          paddingHorizontal: 12,
-          paddingVertical: 10,
-          fontSize: 14,
-          fontFamily: "Inter_400Regular",
-          minHeight: multiline ? 70 : undefined,
-          textAlignVertical: multiline ? "top" : "center",
+          borderColor: focused ? colors.borderStrong : colors.border,
+          borderRadius: colors.radiusSm + 2,
         }}
-      />
+      >
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.mutedForeground}
+          secureTextEntry={secure && !reveal}
+          multiline={multiline}
+          keyboardType={keyboardType}
+          autoCapitalize="none"
+          autoCorrect={false}
+          // Jamais de suggestions / mémorisation clavier pour un secret.
+          autoComplete={secure ? "off" : undefined}
+          importantForAutofill={secure ? "no" : undefined}
+          accessibilityLabel={label}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          style={{
+            flex: 1,
+            color: colors.foreground,
+            paddingHorizontal: 12,
+            paddingVertical: 11,
+            fontSize: 14.5,
+            fontFamily: "Inter_400Regular",
+            minHeight: multiline ? 76 : 46,
+            textAlignVertical: multiline ? "top" : "center",
+          }}
+        />
+        {secure ? (
+          <Pressable
+            hitSlop={8}
+            onPress={() => setReveal((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={reveal ? "Masquer" : "Afficher"}
+            style={{ paddingHorizontal: 12, paddingVertical: 10 }}
+          >
+            <Feather name={reveal ? "eye-off" : "eye"} size={17} color={colors.mutedForeground} />
+          </Pressable>
+        ) : null}
+      </View>
       {hint ? (
-        <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 5, fontFamily: "Inter_400Regular", lineHeight: 15 }}>
-          {hint}
-        </Text>
+        <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 6, fontFamily: "Inter_400Regular", lineHeight: 17 }}>{hint}</Text>
       ) : null}
     </View>
   );
@@ -389,6 +556,45 @@ export function Segmented<V extends string>({
   onChange: (v: V) => void;
 }) {
   const colors = useColors();
+  // Peu d'options : contrôle segmenté sur une piste. Beaucoup (branches…) : pastilles qui passent à la ligne.
+  if (options.length <= 4) {
+    return (
+      <View
+        accessibilityRole="tablist"
+        style={{ flexDirection: "row", padding: 3, gap: 3, borderRadius: colors.radiusSm + 3, backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border, marginBottom: 12 }}
+      >
+        {options.map((o) => {
+          const on = o.value === value;
+          return (
+            <Pressable
+              key={o.value}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: on }}
+              onPress={() => {
+                if (!on) tapFeedback();
+                onChange(o.value);
+              }}
+              style={{
+                flex: 1,
+                alignItems: "center",
+                justifyContent: "center",
+                paddingVertical: 8,
+                paddingHorizontal: 6,
+                borderRadius: colors.radiusSm,
+                backgroundColor: on ? colors.elevated : "transparent",
+                borderWidth: on ? 1 : 0,
+                borderColor: colors.borderStrong,
+              }}
+            >
+              <Text numberOfLines={1} style={{ color: on ? colors.accent : colors.mutedForeground, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
+                {o.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  }
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
       {options.map((o) => {
@@ -396,17 +602,22 @@ export function Segmented<V extends string>({
         return (
           <Pressable
             key={o.value}
-            onPress={() => onChange(o.value)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: on }}
+            onPress={() => {
+              if (!on) tapFeedback();
+              onChange(o.value);
+            }}
             style={{
               paddingHorizontal: 12,
               paddingVertical: 8,
               borderRadius: 20,
               borderWidth: 1,
-              borderColor: on ? colors.accent : colors.border,
+              borderColor: on ? colors.borderStrong : colors.border,
               backgroundColor: on ? colors.greenBg : "transparent",
             }}
           >
-            <Text style={{ color: on ? colors.accent : colors.foreground, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>{o.label}</Text>
+            <Text style={{ color: on ? colors.accent : colors.foreground, fontSize: 12.5, fontFamily: "Inter_600SemiBold" }}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -484,7 +695,7 @@ export function statusColor(kind: string, colors: ReturnType<typeof useColors>):
     case "deleted":
       return colors.destructive;
     default:
-      return "#e3b341";
+      return C.warning;
   }
 }
 

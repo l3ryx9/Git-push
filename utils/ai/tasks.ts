@@ -6,7 +6,8 @@ import { isBinary, unifiedDiff } from "@/utils/git/diff";
 import * as engine from "@/utils/git/engine";
 import { decodeUtf8 } from "@/utils/git/fs";
 
-import { stripFences } from "./agent";
+import { forModel, fromModel, stripFences } from "./agent";
+import { isSensitivePath } from "./pure";
 import { complete } from "./providers";
 import type { AiSettings } from "./settings";
 
@@ -21,6 +22,10 @@ export async function diffText(dir: string, paths: string[], limit = 40000): Pro
       out += `\n… (${paths.length} fichiers au total, diff tronqué)`;
       break;
     }
+    if (isSensitivePath(p)) {
+      out += `\n=== ${p} (fichier sensible : contenu non transmis)\n`;
+      continue;
+    }
     const [a, b] = await Promise.all([engine.fileAt(dir, "HEAD", p), engine.fileAt(dir, "WORKDIR", p)]);
     if ((a && isBinary(a)) || (b && isBinary(b))) {
       out += `\n=== ${p} (binaire)\n`;
@@ -30,7 +35,7 @@ export async function diffText(dir: string, paths: string[], limit = 40000): Pro
     out += `\n=== ${p}${!a ? " (nouveau)" : !b ? " (supprimé)" : ""}\n`;
     out += d.rows.map((r) => (r.kind === "hunk" ? r.text : `${r.t === 1 ? "+" : r.t === -1 ? "-" : " "}${r.text}`)).join("\n");
   }
-  return out.slice(0, limit + 200);
+  return forModel(out.slice(0, limit + 200));
 }
 
 export async function suggestCommitMessage(s: AiSettings, dir: string, paths: string[], draft: string, lang: string): Promise<string> {
@@ -51,9 +56,10 @@ export async function aiEditFile(s: AiSettings, path: string, content: string, i
   const out = await complete(
     s,
     `Tu modifies des fichiers de code. On te donne un fichier et une consigne. Renvoie le fichier COMPLET modifié, dans un seul bloc de code, sans aucun texte avant ou après. Ne change que ce que demande la consigne, conserve le style, l'indentation et les fins de ligne. Les commentaires éventuels que tu ajoutes sont en ${lname(lang)}.`,
-    `Fichier : ${path}\nConsigne : ${instruction}\n\n\`\`\`\n${content}\n\`\`\``
+    `Fichier : ${path}\nConsigne : ${instruction}\n\n\`\`\`\n${forModel(content)}\n\`\`\``
   );
-  let next = stripFences(out);
+  // Les secrets masqués (__SECRET_…__) sont remis en place dans le fichier renvoyé.
+  let next = fromModel(stripFences(out));
   if (content.endsWith("\n") && !next.endsWith("\n")) next += "\n";
   return next;
 }
@@ -70,7 +76,7 @@ export async function draftText(s: AiSettings, kind: DraftKind, context: string,
   const out = await complete(
     s,
     `Tu aides à rédiger ${what}. Langue : ${lname(lang)}. Réponds UNIQUEMENT avec le texte final, prêt à coller, sans introduction.`,
-    `${context}\n\n${current ? `Brouillon actuel à compléter / améliorer :\n${current}` : "Pas encore de brouillon : rédige-le."}`,
+    forModel(`${context}\n\n${current ? `Brouillon actuel à compléter / améliorer :\n${current}` : "Pas encore de brouillon : rédige-le."}`),
     undefined,
     true
   );

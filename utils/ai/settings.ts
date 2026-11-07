@@ -3,6 +3,7 @@
  * modèles, et interrupteur global qui masque toutes les fonctions IA.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AppState } from "react-native";
 
 import { getSecret, setSecret } from "@/utils/secrets";
 
@@ -62,7 +63,24 @@ const listeners = new Set<(s: AiSettings) => void>();
 /** Les clés API vont dans le coffre du téléphone, jamais dans les réglages en clair. */
 const secKey = (p: AiProvider) => `gitcrush_ai_key_${p}`;
 const ALL: AiProvider[] = ["gemini", "openai", "anthropic"];
-const secretTimers = new Map<AiProvider, ReturnType<typeof setTimeout>>();
+const secretTimers = new Map<AiProvider, { timer: ReturnType<typeof setTimeout>; write: () => Promise<void> }>();
+
+/** Écrit tout de suite les clés en attente (l'app passe en arrière-plan : rien ne doit se perdre). */
+export async function flushAiSecrets(): Promise<void> {
+  const pending = [...secretTimers.values()];
+  for (const p of pending) {
+    clearTimeout(p.timer);
+    await p.write().catch(() => undefined);
+  }
+}
+
+try {
+  AppState.addEventListener("change", (state: string) => {
+    if (state !== "active") void flushAiSecrets();
+  });
+} catch {
+  /* environnement sans AppState (tests) */
+}
 
 function writeJson() {
   if (!memory) return Promise.resolve();
@@ -110,15 +128,13 @@ export async function saveAi(patch: Partial<AiSettings>): Promise<AiSettings> {
   for (const prov of ALL) {
     if (patch.keys && patch.keys[prov] !== undefined && patch.keys[prov] !== cur.keys[prov]) {
       const old = secretTimers.get(prov);
-      if (old) clearTimeout(old);
-      const value = patch.keys[prov];
-      secretTimers.set(
-        prov,
-        setTimeout(() => {
-          secretTimers.delete(prov);
-          void setSecret(secKey(prov), value.trim() ? value : null);
-        }, 500)
-      );
+      if (old) clearTimeout(old.timer);
+      const value = patch.keys[prov].trim();
+      const write = () => {
+        secretTimers.delete(prov);
+        return setSecret(secKey(prov), value ? value : null);
+      };
+      secretTimers.set(prov, { timer: setTimeout(() => void write(), 500), write });
     }
   }
   await writeJson();

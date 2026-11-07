@@ -10,6 +10,7 @@ import { useRepos } from "@/context/ReposContext";
 import { useColors } from "@/hooks/useColors";
 import * as engine from "@/utils/git/engine";
 import type { LogEntry } from "@/utils/git/engine";
+import { C } from "@/constants/colors";
 
 const PAGE = 40;
 
@@ -84,7 +85,7 @@ export default function CommitsScreen() {
                   pressed && { backgroundColor: colors.secondary },
                 ]}
               >
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: merge ? "#a371f7" : colors.green }} />
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: merge ? C.violet : colors.green }} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.foreground, fontSize: 13, fontFamily: "Inter_500Medium" }} numberOfLines={1}>
                     {item.commit.message.split("\n")[0]}

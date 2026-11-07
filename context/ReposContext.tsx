@@ -15,6 +15,7 @@ import {
   removeContainer,
   repoDir,
   repoNameFromUrl,
+  splitUrlCredentials,
   subscribeContainers,
   updateContainer,
   type AuthMode,
@@ -68,6 +69,10 @@ export function ReposProvider({ children }: { children: React.ReactNode }) {
   const [busy, setBusy] = useState<Record<string, string | undefined>>({});
   const [progress, setProgress] = useState<Record<string, Progress | undefined>>({});
   const openedOnce = useRef(false);
+  /** Dépôts en cours de synchronisation : évite d'empiler la même synchro (ouverture répétée de l'app). */
+  const inflight = useRef(new Set<string>());
+  /** Progression : au plus ~8 mises à jour par seconde (chaque mise à jour redessine les écrans abonnés). */
+  const progressTimers = useRef(new Map<string, { last: number; pending?: Progress; timer?: ReturnType<typeof setTimeout> }>());
 
   useEffect(() => {
     const unsub = subscribeContainers((list) => setContainers([...list]));
@@ -87,7 +92,11 @@ export function ReposProvider({ children }: { children: React.ReactNode }) {
     startRetryWatcher();
     const syncFlag = async (flag: "onOpen" | "onClose", reason: SyncReason) => {
       const list = await loadContainers();
+      const now = Date.now();
       for (const c of list.filter((x) => x.sync[flag] && !x.merge)) {
+        if (inflight.current.has(c.id)) continue;
+        // Retour rapide dans l'app (moins d'une minute après une synchro réussie) : rien à refaire.
+        if (flag === "onOpen" && c.lastSync?.ok && now - c.lastSync.at < 60000) continue;
         void syncWithUi(c.id, reason).catch(() => undefined);
       }
     };
@@ -111,15 +120,45 @@ export function ReposProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   function setBusyFor(id: string, label: string | undefined) {
-    setBusy((b) => ({ ...b, [id]: label }));
-    if (!label) setProgress((p) => ({ ...p, [id]: undefined }));
+    setBusy((b) => (b[id] === label ? b : { ...b, [id]: label }));
+    if (!label) {
+      const pt = progressTimers.current.get(id);
+      if (pt?.timer) clearTimeout(pt.timer);
+      progressTimers.current.delete(id);
+      setProgress((p) => (p[id] === undefined ? p : { ...p, [id]: undefined }));
+    }
   }
 
   function progressFor(id: string) {
-    return (p: Progress) => setProgress((cur) => ({ ...cur, [id]: p }));
+    return (p: Progress) => {
+      const map = progressTimers.current;
+      const st = map.get(id) ?? { last: 0 };
+      map.set(id, st);
+      const now = Date.now();
+      const prev = st.pending;
+      const phaseChanged = !prev || prev.phase !== p.phase;
+      if (phaseChanged || now - st.last >= 120) {
+        if (st.timer) clearTimeout(st.timer);
+        st.timer = undefined;
+        st.pending = p;
+        st.last = now;
+        setProgress((cur) => ({ ...cur, [id]: p }));
+        return;
+      }
+      st.pending = p;
+      if (!st.timer) {
+        st.timer = setTimeout(() => {
+          st.timer = undefined;
+          st.last = Date.now();
+          const latest = st.pending;
+          if (latest && map.get(id) === st) setProgress((cur) => ({ ...cur, [id]: latest }));
+        }, 120);
+      }
+    };
   }
 
   async function syncWithUi(id: string, reason: SyncReason): Promise<SyncSummary> {
+    inflight.current.add(id);
     setBusyFor(id, "sync");
     try {
       const res = await syncContainer(id, reason, progressFor(id));
@@ -129,6 +168,7 @@ export function ReposProvider({ children }: { children: React.ReactNode }) {
       void refreshBackgroundSchedule();
       throw e;
     } finally {
+      inflight.current.delete(id);
       setBusyFor(id, undefined);
     }
   }
@@ -141,16 +181,21 @@ export function ReposProvider({ children }: { children: React.ReactNode }) {
 
   async function clone(p: CloneParams, onProgress?: (p: Progress) => void): Promise<Container> {
     const id = newId();
+    // https://user:token@hôte/… : les identifiants vont dans le coffre, jamais dans l'URL
+    // (sinon ils finiraient en clair dans .git/config et dans la liste des dépôts).
+    const parts = splitUrlCredentials(p.url);
+    const inUrl = !!parts.password;
+    const auth: AuthMode = inUrl ? "basic" : p.auth;
     const c: Container = {
       id,
-      name: (p.name || repoNameFromUrl(p.url)).trim(),
-      url: p.url.trim(),
+      name: (p.name || repoNameFromUrl(parts.url)).trim(),
+      url: parts.url,
       folder: id,
       createdAt: Date.now(),
-      auth: p.auth,
-      accountId: p.auth === "account" ? p.accountId : undefined,
-      username: p.username?.trim() || undefined,
-      password: p.password || undefined,
+      auth,
+      accountId: auth === "account" ? p.accountId : undefined,
+      username: (inUrl ? parts.username : p.username)?.trim() || undefined,
+      password: (inUrl ? parts.password : p.password) || undefined,
       author: defaultAuthor(),
       remote: "origin",
       insecureSsl: p.insecureSsl || undefined,

@@ -17,6 +17,7 @@ import { aiEditFile } from "@/utils/ai/tasks";
 import { isBinary, unifiedDiff, type DiffResult } from "@/utils/git/diff";
 import { decodeUtf8, pathInfo, readBytes, toUri, writeTextDeep } from "@/utils/git/fs";
 import { repoDir } from "@/utils/git/store";
+import { C } from "@/constants/colors";
 
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|bmp|ico|svg)$/i;
 const MAX_EDIT = 1024 * 1024;
@@ -200,9 +201,9 @@ export default function EditorScreen() {
     <View style={{ flexDirection: "row" }}>
       {aiReady(ai) && !path.startsWith(".git/") ? (
         aiBusy ? (
-          <ActivityIndicator size="small" color="#a78bfa" style={{ paddingHorizontal: 8 }} />
+          <ActivityIndicator size="small" color={C.ai} style={{ paddingHorizontal: 8 }} />
         ) : (
-          <IconBtn icon="zap" color="#a78bfa" onPress={() => setAskAi(true)} />
+          <IconBtn icon="zap" color={C.ai} onPress={() => setAskAi(true)} />
         )
       ) : null}
       {dirty ? <IconBtn icon="save" color={colors.accent} onPress={save} disabled={saving} /> : null}

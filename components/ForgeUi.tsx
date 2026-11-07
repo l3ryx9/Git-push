@@ -5,6 +5,7 @@ import { Text, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 import type { ForgeRef, Kind } from "@/utils/forge";
+import { C } from "@/constants/colors";
 
 type T = (key: string, vars?: Record<string, string | number>) => string;
 
@@ -39,7 +40,7 @@ export function StateBadge({ state, draft, t }: { state: "open" | "closed" | "me
   const map = {
     open: { c: colors.accent, i: "circle" as const },
     closed: { c: colors.destructive, i: "x-circle" as const },
-    merged: { c: "#a371f7", i: "git-merge" as const },
+    merged: { c: C.violet, i: "git-merge" as const },
   };
   const m = map[state];
   return (
@@ -51,7 +52,7 @@ export function StateBadge({ state, draft, t }: { state: "open" | "closed" | "me
 }
 
 export function runColor(status: string, conclusion: string | null, colors: ReturnType<typeof useColors>) {
-  if (status !== "completed") return "#e3b341";
+  if (status !== "completed") return C.warning;
   if (conclusion === "success") return colors.accent;
   if (conclusion === "failure" || conclusion === "timed_out" || conclusion === "startup_failure") return colors.destructive;
   return colors.mutedForeground;
@@ -72,7 +73,7 @@ export function PatchView({ patch }: { patch: string }) {
   return (
     <View style={{ paddingVertical: 4 }}>
       {lines.map((l, i) => {
-        const c = l.startsWith("+") ? "#56d364" : l.startsWith("-") ? "#f85149" : l.startsWith("@@") ? "#79c0ff" : colors.foreground;
+        const c = l.startsWith("+") ? C.diffAdd : l.startsWith("-") ? C.diffDel : l.startsWith("@@") ? C.info : colors.foreground;
         const bg = l.startsWith("+") ? "#0f2a17" : l.startsWith("-") ? "#2d1215" : l.startsWith("@@") ? "#0d1d33" : "transparent";
         return (
           <Text key={i} style={{ color: c, backgroundColor: bg, fontFamily: "monospace", fontSize: 11, lineHeight: 16, paddingHorizontal: 8 }}>

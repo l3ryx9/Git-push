@@ -78,15 +78,19 @@ function toBase64(data: unknown, enc?: string): string {
 const promises = {
   async readFile(path: string, opts?: unknown): Promise<string | Buffer> {
     if (typeof path !== "string") throw fsError("EINVAL", String(path));
-    const i = await info(path);
-    if (!i.exists) throw fsError("ENOENT", path);
-    if (i.isDirectory) throw fsError("EISDIR", path);
     const enc = encodingOf(opts);
-    if (enc === "utf8" || enc === "utf-8") {
-      return FS.readAsStringAsync(toUri(path), { encoding: FS.EncodingType.UTF8 });
+    const utf8 = enc === "utf8" || enc === "utf-8";
+    // Lecture directe : isomorphic-git lit des milliers de fichiers (objets, index, refs).
+    // Le test d'existence préalable doublait les allers-retours natifs pour chaque
+    // lecture réussie. Un échec est signalé comme ENOENT (isomorphic-git le traite
+    // comme « absent », ce qui est le cas dans l'immense majorité des échecs).
+    try {
+      if (utf8) return await FS.readAsStringAsync(toUri(path), { encoding: FS.EncodingType.UTF8 });
+      const b64 = await FS.readAsStringAsync(toUri(path), { encoding: FS.EncodingType.Base64 });
+      return Buffer.from(b64, "base64");
+    } catch {
+      throw fsError("ENOENT", path);
     }
-    const b64 = await FS.readAsStringAsync(toUri(path), { encoding: FS.EncodingType.Base64 });
-    return Buffer.from(b64, "base64");
   },
 
   async writeFile(path: string, data: unknown, opts?: unknown): Promise<void> {

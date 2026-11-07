@@ -11,6 +11,7 @@ import { useRepos } from "@/context/ReposContext";
 import { useColors } from "@/hooks/useColors";
 import { showAlert, showConfirm } from "@/utils/dialogs";
 import * as engine from "@/utils/git/engine";
+import { showToast } from "@/utils/toast";
 
 export default function RemotesScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -42,7 +43,7 @@ export default function RemotesScreen() {
   async function act(label: string, fn: () => Promise<unknown>, okMsg?: string) {
     try {
       await fn();
-      if (okMsg) showAlert(t(`g.op.${label}`), okMsg);
+      if (okMsg) showToast(okMsg, "success", t(`g.op.${label}`));
     } catch (e) {
       showAlert(t(`g.op.${label}`), describeError(e, t));
     } finally {

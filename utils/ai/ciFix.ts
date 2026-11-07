@@ -13,7 +13,7 @@ import { runAgent, systemPrompt, type AgentEvent, type Preview, type RepoToolCtx
 import { ciCheck, type CiResult } from "./ci";
 import type { AiMsg, ToolCall } from "./providers";
 import type { AiSettings } from "./settings";
-import { pathCandidates, signature } from "./pure";
+import { isSensitivePath, pathCandidates, signature } from "./pure";
 import { lintChangedWorkflows, workflowFiles, workflowScopeHint } from "./workflows";
 
 export const CI_MAX_ATTEMPTS = 3;
@@ -47,6 +47,7 @@ async function failingFiles(dir: string, log: string, noJobs: boolean): Promise<
 async function readFor(dir: string, paths: string[]): Promise<string> {
   const out: string[] = [];
   for (const p of paths) {
+    if (isSensitivePath(p)) continue; // clés / mots de passe : jamais envoyés à l'IA
     const b = await readBytes(`${dir}/${p}`).catch(() => null);
     if (!b || b.length > 40000) continue;
     const text = decodeUtf8(b);

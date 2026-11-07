@@ -4,6 +4,8 @@
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { redactSecrets } from "./ai/pure";
+
 const KEY = "@gitcrush_error_log_v1";
 const MAX = 20;
 
@@ -21,8 +23,9 @@ export function logError(source: string, e: unknown): Promise<void> {
   const entry: ErrorEntry = {
     at: Date.now(),
     source,
-    message: String(err?.message ?? e).slice(0, 300),
-    stack: err?.stack ? String(err.stack).slice(0, 600) : undefined,
+    // Tokens / clés / mots de passe d'URL masqués : le journal peut être partagé.
+    message: redactSecrets(String(err?.message ?? e)).slice(0, 300),
+    stack: err?.stack ? redactSecrets(String(err.stack)).slice(0, 600) : undefined,
   };
   queue = queue
     .then(async () => {

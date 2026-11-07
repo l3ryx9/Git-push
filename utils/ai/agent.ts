@@ -12,12 +12,50 @@ import { createRepository, hasGitHubToken } from "@/utils/git/create";
 import { ctxFor, getContainer, repoDir, type Container } from "@/utils/git/store";
 
 import { ciCheck } from "./ci";
-import { applyEdits, summarizeTree } from "./pure";
+import { applyEdits, contentProblem, fitHistory, isSensitivePath, maskSecrets, summarizeTree, unmaskSecrets } from "./pure";
 import { detectProject, lintAllWorkflows, lintChangedWorkflows, lintWorkflow, TEMPLATE_FOR, workflowNote, workflowScopeHint, workflowTemplate, WORKFLOW_DIR } from "./workflows";
 import { chat, type AiMsg, type ToolCall, type ToolDef } from "./providers";
-import type { AiSettings } from "./settings";
+import type { AiProvider, AiSettings } from "./settings";
 
 const MAX_READ = 60000;
+
+/**
+ * Coffre des secrets masqués (mémoire du téléphone uniquement, jamais envoyé ni
+ * enregistré) : les tokens / clés trouvés dans les fichiers sont remplacés par
+ * __SECRET_xxxxxxxx__ avant d'être montrés à l'IA, puis remis en place quand
+ * l'IA réécrit le fichier.
+ */
+const SECRET_VAULT = new Map<string, string>();
+
+/** Texte destiné au modèle : secrets masqués. */
+export function forModel(text: string): string {
+  return maskSecrets(text, SECRET_VAULT);
+}
+
+/** Texte écrit par le modèle : secrets remis en place (erreur si un marqueur est inconnu). */
+export function fromModel(text: string): string {
+  const r = unmaskSecrets(text, SECRET_VAULT);
+  if (r.missing.length) throw new Error(`marqueur de secret inconnu (${r.missing[0]}) : relis le fichier avant de le réécrire, sans modifier les marqueurs __SECRET_…__.`);
+  return r.text;
+}
+
+const SENSITIVE_MSG = "fichier sensible (clés, mots de passe) : son contenu n'est jamais transmis à l'IA. Demande à l'utilisateur de le modifier lui-même si besoin.";
+
+function guardRead(p: string) {
+  if (isSensitivePath(p)) throw new Error(`${p} : ${SENSITIVE_MSG}`);
+}
+
+/** Vérifie qu'un contenu ne casse pas un fichier structuré (JSON) ; lève une erreur sinon. */
+function guardContent(p: string, next: string, previous: string | null) {
+  const problem = contentProblem(p, next, previous);
+  if (problem) throw new Error(problem);
+}
+
+/** Arguments d'edit_file avec les secrets remis en place (old_text et new_text). */
+function unmaskEdits(a: Record<string, any>): Record<string, any> {
+  const list: { old_text?: unknown; new_text?: unknown }[] = Array.isArray(a.edits) && a.edits.length ? a.edits : [{ old_text: a.old_text, new_text: a.new_text }];
+  return { edits: list.map((e) => ({ old_text: fromModel(String(e?.old_text ?? "")), new_text: fromModel(String(e?.new_text ?? "")) })) };
+}
 /** Marqueur que le modèle ajoute quand tout est terminé : évite un appel final juste pour le résumé. */
 const END_MARK = "[[FIN]]";
 
@@ -195,6 +233,7 @@ const TOOLS: Tool[] = [
     mutating: false,
     run: async (ctx, a) => {
       const p = cleanPath(a.path);
+      guardRead(p);
       const text = await readTextFile(ctx.dir, p);
       if (text === null) return `ERREUR : fichier introuvable : ${p}`;
       let out = text;
@@ -219,6 +258,7 @@ const TOOLS: Tool[] = [
       const out: string[] = [];
       for (const p of paths) {
         try {
+          guardRead(p);
           const text = await readTextFile(ctx.dir, p);
           if (text === null) out.push(`=== ${p}\nERREUR : fichier introuvable`);
           else out.push(`=== ${p}\n${text.length > per ? `${text.slice(0, per)}\n…[tronqué : ${text.length} caractères]` : text}`);
@@ -250,6 +290,7 @@ const TOOLS: Tool[] = [
       const hits: string[] = [];
       for (const f of files) {
         if (hits.length >= 60) break;
+        if (isSensitivePath(f)) continue;
         const bytes = await readBytes(`${ctx.dir}/${f}`);
         if (!bytes || isBinary(bytes)) continue;
         decodeUtf8(bytes)
@@ -279,6 +320,7 @@ const TOOLS: Tool[] = [
     mutating: false,
     run: async (ctx, a) => {
       const p = cleanPath(a.path);
+      guardRead(p);
       const [x, y] = await Promise.all([engine.fileAt(ctx.dir, "HEAD", p), engine.fileAt(ctx.dir, "WORKDIR", p)]);
       if ((x && isBinary(x)) || (y && isBinary(y))) return "Fichier binaire modifié.";
       const d = unifiedDiff(x ? decodeUtf8(x) : "", y ? decodeUtf8(y) : "");
@@ -388,19 +430,24 @@ const TOOLS: Tool[] = [
     preview: async (ctx, a) => {
       const p = cleanPath(a.path);
       const old = (await readTextFile(ctx.dir, p).catch(() => null)) ?? "";
-      return { title: old ? "write" : "create", path: p, diff: unifiedDiff(old, String(a.content ?? "")) };
+      const next = fromModel(String(a.content ?? ""));
+      const problem = contentProblem(p, next, old || null);
+      return { title: old ? "write" : "create", path: p, diff: unifiedDiff(old, next), detail: problem ?? undefined };
     },
     noop: async (ctx, a) => {
       const p = cleanPath(a.path);
       const old = await readTextFile(ctx.dir, p).catch(() => null);
-      return old !== null && old === String(a.content ?? "") ? `OK : ${p} déjà identique, rien écrit.` : null;
+      return old !== null && old === unmaskSecrets(String(a.content ?? ""), SECRET_VAULT).text ? `OK : ${p} déjà identique, rien écrit.` : null;
     },
     run: async (ctx, a) => {
       const p = cleanPath(a.path);
       guardWrite(p);
+      const next = fromModel(String(a.content ?? ""));
+      const old = await readTextFile(ctx.dir, p).catch(() => null);
+      guardContent(p, next, old);
       await snap(ctx, p);
-      await writeTextDeep(`${ctx.dir}/${p}`, String(a.content ?? ""));
-      return `OK : ${p} écrit (${String(a.content ?? "").length} caractères).${workflowNote(p, String(a.content ?? ""))}`;
+      await writeTextDeep(`${ctx.dir}/${p}`, next);
+      return `OK : ${p} écrit (${next.length} caractères).${workflowNote(p, next)}`;
     },
   },
   {
@@ -410,20 +457,24 @@ const TOOLS: Tool[] = [
     mutating: true,
     preview: async (ctx, a) => {
       const files: { path: string; diff: DiffResult }[] = [];
+      const problems: string[] = [];
       for (const f of Array.isArray(a.files) ? a.files : []) {
         const p = cleanPath(f?.path);
         const old = await readTextFile(ctx.dir, p).catch(() => null);
-        if (old !== null && old === String(f?.content ?? "")) continue; // identique : rien à valider
-        files.push({ path: p, diff: unifiedDiff(old ?? "", String(f?.content ?? "")) });
+        const next = fromModel(String(f?.content ?? ""));
+        if (old !== null && old === next) continue; // identique : rien à valider
+        const problem = contentProblem(p, next, old);
+        if (problem) problems.push(problem);
+        files.push({ path: p, diff: unifiedDiff(old ?? "", next) });
       }
-      return { title: "write_files", files };
+      return { title: "write_files", files, detail: problems.length ? problems.join("\n") : undefined };
     },
     noop: async (ctx, a) => {
       const files: any[] = Array.isArray(a.files) ? a.files : [];
       if (!files.length) return null;
       for (const f of files) {
         const old = await readTextFile(ctx.dir, cleanPath(f?.path)).catch(() => null);
-        if (old === null || old !== String(f?.content ?? "")) return null;
+        if (old === null || old !== unmaskSecrets(String(f?.content ?? ""), SECRET_VAULT).text) return null;
       }
       return `OK : ${files.length} fichier(s) déjà identiques, rien écrit.`;
     },
@@ -437,12 +488,14 @@ const TOOLS: Tool[] = [
         try {
           const p = cleanPath(f?.path);
           guardWrite(p);
+          const next = fromModel(String(f?.content ?? ""));
           const old = await readTextFile(ctx.dir, p).catch(() => null);
-          if (old !== null && old === String(f?.content ?? "")) continue;
+          if (old !== null && old === next) continue;
+          guardContent(p, next, old);
           await snap(ctx, p);
-          await writeTextDeep(`${ctx.dir}/${p}`, String(f?.content ?? ""));
+          await writeTextDeep(`${ctx.dir}/${p}`, next);
           ok.push(p);
-          notes += workflowNote(p, String(f?.content ?? ""));
+          notes += workflowNote(p, next);
         } catch (e: any) {
           bad.push(`${f?.path} (${e?.message ?? e})`);
         }
@@ -470,15 +523,21 @@ const TOOLS: Tool[] = [
     preview: async (ctx, a) => {
       const p = cleanPath(a.path);
       const old = (await readTextFile(ctx.dir, p)) ?? "";
-      const r = applyEdits(old, a);
+      const r = applyEdits(old, unmaskEdits(a));
       if ("error" in r) return { title: "edit", path: p, detail: r.error };
-      return { title: "edit", path: p, diff: unifiedDiff(old, r.text) };
+      const problem = contentProblem(p, r.text, old);
+      return { title: "edit", path: p, diff: unifiedDiff(old, r.text), detail: problem ?? undefined };
     },
     noop: async (ctx, a) => {
       const p = cleanPath(a.path);
       const old = await readTextFile(ctx.dir, p).catch(() => null);
       if (old === null) return null;
-      const r = applyEdits(old, a);
+      let r: ReturnType<typeof applyEdits>;
+      try {
+        r = applyEdits(old, unmaskEdits(a));
+      } catch {
+        return null;
+      }
       return !("error" in r) && r.text === old ? `OK : ${p} inchangé (les modifications ne changent rien).` : null;
     },
     run: async (ctx, a) => {
@@ -486,8 +545,9 @@ const TOOLS: Tool[] = [
       guardWrite(p);
       const old = await readTextFile(ctx.dir, p);
       if (old === null) return `ERREUR : fichier introuvable : ${p}`;
-      const r = applyEdits(old, a);
+      const r = applyEdits(old, unmaskEdits(a));
       if ("error" in r) return `ERREUR : ${p} — ${r.error}`;
+      guardContent(p, r.text, old);
       await snap(ctx, p);
       await writeTextDeep(`${ctx.dir}/${p}`, r.text);
       return `OK : ${p} modifié.${workflowNote(p, r.text)}`;
@@ -616,6 +676,8 @@ export function systemPrompt(mode: "chat" | "agent", repoName: string, lang: str
       : "Regroupe tes appels d'outils : plusieurs appels dans le même tour, read_files, write_files, edit_file avec edits[].",
     "Explore avec find_files (par nom), search (dans le contenu, regex possible), list_files, read_files, git_status, git_diff, git_log seulement si le contexte ne suffit pas.",
     "WORKFLOWS GitHub Actions : pour compiler / tester dans le cloud, utilise create_workflow (modèles prêts, YAML déjà vérifié) plutôt que d'écrire le YAML à la main ; validate_workflow vérifie un fichier ; ne synchronise jamais un workflow invalide.",
+    "SECRETS : les tokens / clés / mots de passe des fichiers apparaissent sous la forme __SECRET_xxxxxxxx__ ; recopie ces marqueurs tels quels (ils sont remis en place à l'écriture), ne les invente jamais. Les fichiers sensibles (.env, clés, keystores) ne te sont pas lisibles.",
+    "QUALITÉ : modifications minimales et ciblées, pas de reformatage du reste du fichier ; old_text = quelques lignes exactes et uniques copiées du fichier lu ; garde imports, types et style existants ; un JSON (package.json…) doit rester valide.",
     "LONGUEUR : une réponse trop longue est COUPÉE et perdue. write_files : 4 fichiers maximum (ou ~10 000 caractères au total) par appel ; s'il y en a davantage, écris-les en plusieurs tours successifs, jamais tous dans une seule réponse.",
     mode === "agent"
       ? [
@@ -648,7 +710,7 @@ async function relevantFiles(dir: string, files: string[], request: string, skip
   const words = [...new Set((request.toLowerCase().match(/[a-zà-ÿ0-9_]{4,}/g) ?? []).filter((w) => !STOP.has(w)))];
   if (!words.length) return [];
   const scored = files
-    .filter((f) => !skip.has(f))
+    .filter((f) => !skip.has(f) && !isSensitivePath(f))
     .map((f) => ({ f, score: words.filter((w) => f.toLowerCase().includes(w)).length }))
     .filter((x) => x.score > 0)
     .sort((x, y) => y.score - x.score || x.f.length - y.f.length)
@@ -682,7 +744,7 @@ export async function buildContext(dir: string, request = ""): Promise<string> {
   }
   const shown = new Set<string>();
   for (const k of KEY_FILES) {
-    if (!files.includes(k.path)) continue;
+    if (!files.includes(k.path) || isSensitivePath(k.path)) continue;
     const text = await readTextFile(dir, k.path).catch(() => null);
     if (text) {
       shown.add(k.path);
@@ -704,7 +766,7 @@ export async function buildContext(dir: string, request = ""): Promise<string> {
   } catch {
     /* dépôt sans commit : statut indisponible */
   }
-  return parts.join("\n\n");
+  return forModel(parts.join("\n\n"));
 }
 
 export type AgentEvent =
@@ -747,91 +809,112 @@ export async function runAgent(opts: {
   opts.ctx.signal = opts.signal;
   const tools = toolsFor(opts.mode).filter((t) => !opts.excludeTools?.includes(t.name));
   const defs: ToolDef[] = tools.map(({ name, description, parameters }) => ({ name, description, parameters }));
-  const msgs = [...opts.history];
+  // Les messages utilisateur (contexte, journaux de build…) passent aussi par le masquage des secrets.
+  const msgs: AiMsg[] = opts.history.map((m) => (m.role === "user" ? { ...m, text: forModel(m.text) } : m));
   const free = opts.settings.freeTier;
   const maxSteps = opts.maxSteps ?? (free ? 8 : 25);
+  // Budget de l'historique envoyé : évite les dépassements de contexte (erreur 400) et réduit le coût.
+  const keepRecent = free ? 3 : 8;
+  const maxChars = free ? 120000 : 400000;
   let approveAll = opts.settings.autoApprove;
   let finished = false;
 
-  for (let step = 0; step < maxSteps; step++) {
-    if (opts.signal?.aborted) {
-      finished = true;
-      break;
-    }
-    const res = await chat(opts.settings, opts.system, free ? compact(msgs) : msgs, defs, opts.signal, {
-      onWait: (seconds) => opts.onEvent({ type: "wait", seconds }),
-    });
-    const done = res.text.includes(END_MARK);
-    const text = res.text.split(END_MARK).join("").trim();
-    msgs.push({ role: "assistant", text, calls: res.calls, raw: res.raw, provider: opts.settings.provider });
-    if (text) opts.onEvent({ type: "assistant", text });
-    if (res.truncated) {
-      // Réponse coupée par la limite de sortie : on demande de recommencer en plus petit.
-      opts.onEvent({ type: "notice", key: "ai.truncated" });
-      msgs.push({
-        role: "user",
-        text: "Ta réponse précédente a été COUPÉE (trop longue) et aucune action n'a été exécutée. Recommence en écrivant 2 à 4 fichiers par appel au maximum (un fichier volumineux seul), et continue là où tu t'étais arrêté.",
+  try {
+    for (let step = 0; step < maxSteps; step++) {
+      if (opts.signal?.aborted) {
+        finished = true;
+        break;
+      }
+      const res = await chat(opts.settings, opts.system, fitHistory(msgs, keepRecent, maxChars), defs, opts.signal, {
+        onWait: (seconds) => opts.onEvent({ type: "wait", seconds }),
       });
-      continue;
-    }
-    if (!res.calls.length) {
-      finished = true;
-      break;
-    }
-
-    const results: { id: string; name: string; output: string }[] = [];
-    let allOk = true;
-    for (const call of res.calls) {
-      const tool = tools.find((t) => t.name === call.name);
-      if (!tool) {
-        allOk = false;
-        results.push({ id: call.id, name: call.name, output: `ERREUR : outil inconnu ${call.name}` });
+      const done = res.text.includes(END_MARK);
+      const text = res.text.split(END_MARK).join("").trim();
+      msgs.push({ role: "assistant", text, calls: res.calls, raw: res.raw, provider: opts.settings.provider });
+      if (text) opts.onEvent({ type: "assistant", text });
+      if (res.truncated) {
+        // Réponse coupée par la limite de sortie : on demande de recommencer en plus petit.
+        opts.onEvent({ type: "notice", key: "ai.truncated" });
+        msgs.push({
+          role: "user",
+          text: "Ta réponse précédente a été COUPÉE (trop longue) et aucune action n'a été exécutée. Recommence en écrivant 2 à 4 fichiers par appel au maximum (un fichier volumineux seul), et continue là où tu t'étais arrêté.",
+        });
         continue;
       }
-      if (tool.mutating && tool.noop) {
-        const skipped = await tool.noop(opts.ctx, call.args).catch(() => null);
-        if (skipped) {
-          opts.onEvent({ type: "tool", call, status: "done", output: skipped });
-          results.push({ id: call.id, name: call.name, output: skipped });
-          continue;
-        }
+      if (!res.calls.length) {
+        finished = true;
+        break;
       }
-      if (tool.mutating && !approveAll) {
-        const preview = tool.preview ? await tool.preview(opts.ctx, call.args).catch((e) => ({ title: call.name, detail: String(e?.message ?? e) })) : { title: call.name };
-        const ok = await opts.approve(call, preview);
-        if (ok === "all") approveAll = true;
-        if (!ok) {
+
+      const results: { id: string; name: string; output: string }[] = [];
+      let allOk = true;
+      for (const call of res.calls) {
+        const tool = tools.find((t) => t.name === call.name);
+        if (!tool) {
           allOk = false;
-          opts.onEvent({ type: "tool", call, status: "refused" });
-          results.push({ id: call.id, name: call.name, output: "REFUSÉ par l'utilisateur." });
+          results.push({ id: call.id, name: call.name, output: `ERREUR : outil inconnu ${call.name}` });
           continue;
         }
+        if (tool.mutating && tool.noop) {
+          const skipped = await tool.noop(opts.ctx, call.args).catch(() => null);
+          if (skipped) {
+            opts.onEvent({ type: "tool", call, status: "done", output: skipped });
+            results.push({ id: call.id, name: call.name, output: skipped });
+            continue;
+          }
+        }
+        if (tool.mutating && !approveAll) {
+          const preview = tool.preview ? await tool.preview(opts.ctx, call.args).catch((e) => ({ title: call.name, detail: String(e?.message ?? e) })) : { title: call.name };
+          const ok = await opts.approve(call, preview);
+          if (ok === "all") approveAll = true;
+          if (!ok) {
+            allOk = false;
+            opts.onEvent({ type: "tool", call, status: "refused" });
+            results.push({ id: call.id, name: call.name, output: "REFUSÉ par l'utilisateur." });
+            continue;
+          }
+        }
+        opts.onEvent({ type: "tool", call, status: "running" });
+        try {
+          const output = forModel(await tool.run(opts.ctx, call.args));
+          const failed = output.startsWith("ERREUR");
+          if (failed) allOk = false;
+          opts.onEvent({ type: "tool", call, status: failed ? "error" : "done", output });
+          results.push({ id: call.id, name: call.name, output });
+        } catch (e: any) {
+          allOk = false;
+          const output = forModel(`ERREUR : ${e?.message ?? e}`);
+          opts.onEvent({ type: "tool", call, status: "error", output });
+          results.push({ id: call.id, name: call.name, output });
+        }
       }
-      opts.onEvent({ type: "tool", call, status: "running" });
-      try {
-        const output = await tool.run(opts.ctx, call.args);
-        const failed = output.startsWith("ERREUR");
-        if (failed) allOk = false;
-        opts.onEvent({ type: "tool", call, status: failed ? "error" : "done", output });
-        results.push({ id: call.id, name: call.name, output });
-      } catch (e: any) {
-        allOk = false;
-        const output = `ERREUR : ${e?.message ?? e}`;
-        opts.onEvent({ type: "tool", call, status: "error", output });
-        results.push({ id: call.id, name: call.name, output });
+      msgs.push({ role: "tool", results });
+      // Le modèle a annoncé la fin dans ce même tour et tout a réussi : pas d'appel de plus.
+      if (done && allOk) {
+        // On referme proprement l'historique (un tour assistant après les résultats d'outils).
+        msgs.push({ role: "assistant", text: text || "OK", calls: [], raw: undefined, provider: opts.settings.provider });
+        finished = true;
+        break;
       }
     }
-    msgs.push({ role: "tool", results });
-    // Le modèle a annoncé la fin dans ce même tour et tout a réussi : pas d'appel de plus.
-    if (done && allOk) {
-      // On referme proprement l'historique (un tour assistant après les résultats d'outils).
-      msgs.push({ role: "assistant", text: text || "OK", calls: [], raw: undefined, provider: opts.settings.provider });
-      finished = true;
-      break;
-    }
+  } catch (e: any) {
+    // Erreur ou arrêt en cours de route : on garde ce qui a déjà été fait (fichiers modifiés,
+    // résultats d'outils) pour que le modèle ne refasse pas tout au prochain message.
+    if (e && typeof e === "object") e.history = closeHistory(msgs, opts.settings.provider);
+    throw e;
   }
   if (!finished) opts.onEvent({ type: "limit", steps: maxSteps });
   return msgs;
+}
+
+/** Historique valide après une interruption : jamais d'appel d'outil sans résultat. */
+export function closeHistory(msgs: AiMsg[], provider: AiProvider): AiMsg[] {
+  const out = [...msgs];
+  const last = out[out.length - 1];
+  if (last?.role === "assistant" && last.calls.length) out.pop();
+  const tail = out[out.length - 1];
+  if (tail?.role === "tool") out.push({ role: "assistant", text: "(interrompu)", calls: [], raw: undefined, provider });
+  return out;
 }
 
 // ─── Tâches ponctuelles ───────────────────────────────────────────────────────

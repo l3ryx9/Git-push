@@ -13,6 +13,7 @@ import { showAlert, showConfirm } from "@/utils/dialogs";
 import * as engine from "@/utils/git/engine";
 import type { MergeOutcome } from "@/utils/git/engine";
 import { mergeRefIntoContainer } from "@/utils/git/sync";
+import { showToast } from "@/utils/toast";
 
 type Data = { current: string | null; local: string[]; remotes: { remote: string; branches: string[] }[] };
 
@@ -67,7 +68,7 @@ export default function BranchesScreen() {
       showAlert(t("g.conflicts.title"), t("g.conflicts.found", { n: o.merge.conflicts.length }), [
         { text: "OK", onPress: () => router.push({ pathname: "/repo/[id]/conflicts", params: { id } } as any) },
       ]);
-    } else showAlert(t("g.branches.merge"), t(`g.merge.${o.kind}`));
+    } else showToast(t(`g.merge.${o.kind}`), "success", t("g.branches.merge"));
   }
 
   const checkout = (name: string, remote?: string) =>

@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getGitHubToken, setGitHubToken } from "@/utils/secrets";
 import React, { useRef, createContext, useContext, useEffect, useState } from "react";
+import { AppState } from "react-native";
 
 export interface GitHubUser {
   login: string;
@@ -65,6 +66,8 @@ interface GitHubContextType {
 const GitHubContext = createContext<GitHubContextType | null>(null);
 
 const REPOS_CACHE_KEY = "@gitcrush_repos_cache_v1";
+/** Profil GitHub mémorisé : l'app s'ouvre tout de suite, même hors ligne. */
+const USER_CACHE_KEY = "@gitcrush_user_v1";
 const REPO_KEY = "@gitcrush_repo";
 const BRANCH_KEY = "@gitcrush_branch";
 
@@ -77,15 +80,37 @@ const GH_HEADERS = (tok: string) => ({
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+function parseJson<T>(raw: string | null | undefined): T | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+/** Profil provisoire (hors ligne, jamais vérifié) : remplacé dès que GitHub répond. */
+const OFFLINE_USER: GitHubUser = { login: "", name: "", avatar_url: "", public_repos: 0, email: null };
+
+/** Numéro de la dernière page dans l'en-tête Link de GitHub (pagination). */
+function lastPage(link: string | null): number {
+  const m = link ? /[?&]page=(\d+)[^>]*>;\s*rel="last"/.exec(link) : null;
+  return m ? Number(m[1]) : 1;
+}
+
 /** Encode chaque segment d'un chemin (espaces, #, ?, accents…) en gardant les "/". */
 function encPath(path: string): string {
   return path.split("/").map(encodeURIComponent).join("/");
 }
 
-/** Une seule requête, avec délai maximum (évite les push bloqués indéfiniment). */
+/**
+ * Une seule requête, avec délai maximum : 30 s pour une lecture (GET), 5 min pour
+ * un envoi (gros blobs). Avant, une lecture pouvait bloquer 5 min sur un réseau mort.
+ */
 async function ghFetchOnce(tok: string, path: string, options?: RequestInit): Promise<Response> {
   const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-  const timer = ctrl ? setTimeout(() => ctrl.abort(), 300000) : null;
+  const isRead = (options?.method ?? "GET").toUpperCase() === "GET";
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), isRead ? 30000 : 300000) : null;
   try {
     return await fetch(`https://api.github.com${path}`, {
       ...options,
@@ -221,63 +246,127 @@ export function GitHubProvider({ children }: { children: React.ReactNode }) {
   // suivant est construit sur un vieux commit → « Update is not a fast forward » (422).
   const lastHead = useRef<{ repo: string; branch: string; commitSha: string; treeSha: string; at: number } | null>(null);
 
+  // Requêtes en cours : une réponse arrivée après un changement de dépôt / branche est ignorée.
+  const commitsReq = useRef(0);
+  const branchesReq = useRef(0);
+  const lastVerify = useRef(0);
+
   useEffect(() => {
-    restoreSession();
+    void restoreSession();
+    // Retour dans l'app : profil revérifié (au plus toutes les 5 min), utile après un démarrage hors ligne.
+    const sub = AppState.addEventListener("change", (state: string) => {
+      if (state === "active" && Date.now() - lastVerify.current > 300000) void revalidate();
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  type UserCheck = { kind: "ok"; user: GitHubUser } | { kind: "invalid" } | { kind: "offline" };
+
+  /** Vérifie le token. Seul un 401 signifie « token révoqué » : réseau / panne GitHub ≠ déconnexion. */
+  async function fetchUser(tok: string): Promise<UserCheck> {
+    lastVerify.current = Date.now();
+    try {
+      const res = await ghFetchRetry(tok, "/user", undefined, 2);
+      if (res.ok) return { kind: "ok", user: (await res.json()) as GitHubUser };
+      if (res.status === 401) return { kind: "invalid" };
+      return { kind: "offline" };
+    } catch {
+      return { kind: "offline" };
+    }
+  }
+
+  function rememberUser(u: GitHubUser) {
+    setUser(u);
+    const { login, name, avatar_url, public_repos, email } = u;
+    AsyncStorage.setItem(USER_CACHE_KEY, JSON.stringify({ login, name, avatar_url, public_repos, email })).catch(() => undefined);
+  }
+
+  /**
+   * Démarrage : tout ce qui est mémorisé (token, profil, dépôts, dépôt choisi) est lu en
+   * parallèle et affiché TOUT DE SUITE ; la vérification auprès de GitHub se fait ensuite.
+   * Avant, l'écran d'accueil attendait la réponse réseau (jusqu'à ~10 s hors ligne) et un
+   * démarrage sans réseau renvoyait à l'écran de connexion.
+   */
   async function restoreSession() {
     try {
-      const tok = await getGitHubToken();
+      const [tok, pairs] = await Promise.all([
+        getGitHubToken(),
+        AsyncStorage.multiGet([USER_CACHE_KEY, REPOS_CACHE_KEY, REPO_KEY, BRANCH_KEY]).catch(() => [] as readonly [string, string | null][]),
+      ]);
       if (!tok) return;
-      // Liste des dépôts connue : affichée tout de suite, mise à jour ensuite.
-      AsyncStorage.getItem(REPOS_CACHE_KEY)
-        .then((raw) => {
-          if (raw) setRepos((cur) => (cur.length ? cur : (JSON.parse(raw) as GitHubRepo[])));
-        })
-        .catch(() => undefined);
-      const ok = await verifyToken(tok);
-      if (!ok) return;
-      const repoJson = await AsyncStorage.getItem(REPO_KEY);
-      const branchStr = await AsyncStorage.getItem(BRANCH_KEY);
-      if (repoJson) {
-        const repo = JSON.parse(repoJson) as GitHubRepo;
+      const get = (k: string) => pairs.find((p: readonly [string, string | null]) => p[0] === k)?.[1] ?? null;
+      const cachedUser = parseJson<GitHubUser>(get(USER_CACHE_KEY));
+      const cachedRepos = parseJson<GitHubRepo[]>(get(REPOS_CACHE_KEY));
+      const repo = parseJson<GitHubRepo>(get(REPO_KEY));
+      const branch = get(BRANCH_KEY) || repo?.default_branch || "main";
+      if (cachedRepos?.length) setRepos((cur) => (cur.length ? cur : cachedRepos));
+      if (repo) {
         setSelectedRepo(repo);
-        const branch = branchStr || repo.default_branch;
         setCurrentBranch(branch);
+      }
+      if (cachedUser) {
+        setToken(tok);
+        setUser(cachedUser);
+        setLoading(false);
+      }
+
+      const check = await fetchUser(tok);
+      if (check.kind === "invalid") {
+        await logout();
+        return;
+      }
+      setToken(tok);
+      if (check.kind === "ok") rememberUser(check.user);
+      else if (!cachedUser) setUser(OFFLINE_USER);
+      setLoading(false);
+      if (repo) {
         void loadBranches(tok, repo);
         void loadCommits(tok, repo, branch);
       }
-      void loadRepos(tok);
+      if (check.kind === "ok") void loadRepos(tok);
     } finally {
       setLoading(false);
     }
   }
 
-  async function verifyToken(tok: string): Promise<boolean> {
-    try {
-      const res = await ghFetch(tok, "/user");
-      if (!res.ok) return false;
-      const u = (await res.json()) as GitHubUser;
-      setToken(tok);
-      setUser(u);
-      return true;
-    } catch {
-      return false;
+  /** Nouvelle vérification (retour dans l'app) : met à jour le profil, déconnecte si le token a été révoqué. */
+  async function revalidate() {
+    const tok = await getGitHubToken();
+    if (!tok) return;
+    const check = await fetchUser(tok);
+    if (check.kind === "invalid") await logout();
+    else if (check.kind === "ok") {
+      rememberUser(check.user);
+      void loadRepos(tok, false);
     }
   }
 
+  async function verifyToken(tok: string): Promise<boolean> {
+    const check = await fetchUser(tok);
+    if (check.kind !== "ok") return false;
+    setToken(tok);
+    rememberUser(check.user);
+    return true;
+  }
+
   async function login(tok: string): Promise<boolean> {
-    const ok = await verifyToken(tok);
+    const clean = tok.trim();
+    const ok = await verifyToken(clean);
     if (ok) {
-      await setGitHubToken(tok);
-      void loadRepos(tok);
+      await setGitHubToken(clean);
+      void loadRepos(clean);
     }
     return ok;
   }
 
   async function logout() {
     await setGitHubToken(null);
-    await AsyncStorage.multiRemove([REPO_KEY, BRANCH_KEY, REPOS_CACHE_KEY]);
+    await AsyncStorage.multiRemove([REPO_KEY, BRANCH_KEY, REPOS_CACHE_KEY, USER_CACHE_KEY]).catch(() => undefined);
+    lastHead.current = null;
+    reposMeta.current = { at: 0 };
+    commitsReq.current++;
+    branchesReq.current++;
     setToken(null);
     setUser(null);
     setRepos([]);
@@ -295,47 +384,59 @@ export function GitHubProvider({ children }: { children: React.ReactNode }) {
     if (!force && Date.now() - reposMeta.current.at < 60000) return;
     setReposLoading(true);
     try {
+      const base = "/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator";
       const headers = reposMeta.current.etag ? { "If-None-Match": reposMeta.current.etag } : undefined;
-      const res = await ghFetch(tok, "/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator", headers ? { headers } : undefined);
+      const res = await ghFetch(tok, base, headers ? { headers } : undefined);
       if (res.status === 304) {
         reposMeta.current.at = Date.now();
         return;
       }
-      if (res.ok) {
-        const data = (await res.json()) as GitHubRepo[];
-        setRepos(data);
-        reposMeta.current = { etag: res.headers.get("etag") ?? undefined, at: Date.now() };
-        const slim = data.map(({ id, name, full_name, private: priv, html_url, default_branch, updated_at, description }) => ({
-          id, name, full_name, private: priv, html_url, default_branch, updated_at, description,
-        }));
-        AsyncStorage.setItem(REPOS_CACHE_KEY, JSON.stringify(slim)).catch(() => undefined);
+      if (!res.ok) return;
+      let data = (await res.json()) as GitHubRepo[];
+      // Plus de 100 dépôts : pages suivantes en parallèle (3 à la fois, 10 pages max).
+      const last = Math.min(lastPage(res.headers.get("link")), 10);
+      if (last > 1) {
+        const pages = Array.from({ length: last - 1 }, (_, i) => i + 2);
+        const more = await mapPool(pages, 3, async (page) => {
+          const r = await ghFetch(tok, `${base}&page=${page}`);
+          return r.ok ? ((await r.json()) as GitHubRepo[]) : [];
+        });
+        data = data.concat(...more);
       }
+      setRepos(data);
+      reposMeta.current = { etag: res.headers.get("etag") ?? undefined, at: Date.now() };
+      const slim = data.map(({ id, name, full_name, private: priv, html_url, default_branch, updated_at, description }) => ({
+        id, name, full_name, private: priv, html_url, default_branch, updated_at, description,
+      }));
+      AsyncStorage.setItem(REPOS_CACHE_KEY, JSON.stringify(slim)).catch(() => undefined);
+    } catch {
+      /* hors ligne : la copie locale reste affichée */
     } finally {
       setReposLoading(false);
     }
   }
 
   async function loadBranches(tok: string, repo: GitHubRepo) {
+    const my = ++branchesReq.current;
     try {
-      const res = await ghFetch(tok, `/repos/${repo.full_name}/branches`);
-      if (res.ok) {
+      const res = await ghFetch(tok, `/repos/${repo.full_name}/branches?per_page=100`);
+      if (res.ok && my === branchesReq.current) {
         const data = (await res.json()) as GitHubBranch[];
-        setBranches(data);
+        if (my === branchesReq.current) setBranches(data);
       }
     } catch {/**/ }
   }
 
   async function loadCommits(tok: string, repo: GitHubRepo, branch: string) {
+    const my = ++commitsReq.current;
     try {
       const res = await ghFetch(tok, `/repos/${repo.full_name}/commits?sha=${encodeURIComponent(branch)}&per_page=30`);
-      if (res.ok) {
-        const data = (await res.json()) as GitHubCommit[];
-        setCommits(Array.isArray(data) ? data : []);
-      } else {
-        setCommits([]);
-      }
+      const data = res.ok ? ((await res.json()) as GitHubCommit[]) : [];
+      // Réponse d'un ancien dépôt / d'une ancienne branche : ignorée (sinon mauvais commits affichés).
+      if (my !== commitsReq.current) return;
+      setCommits(Array.isArray(data) ? data : []);
     } catch {
-      setCommits([]);
+      if (my === commitsReq.current) setCommits([]);
     }
   }
 

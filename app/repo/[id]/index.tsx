@@ -33,6 +33,8 @@ import { goForge } from "@/components/ForgeUi";
 import { AiButton, useAiReady } from "@/components/AiUi";
 import { suggestCommitMessage } from "@/utils/ai/tasks";
 import { forgeFromUrl, type ForgeRef } from "@/utils/forge";
+import { C } from "@/constants/colors";
+import { showToast } from "@/utils/toast";
 
 export default function RepoScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -111,7 +113,7 @@ export default function RepoScreen() {
         { text: "OK", onPress: () => go("conflicts") },
       ]);
     } else {
-      showAlert(t("g.op.pull"), t(`g.merge.${outcome.kind}`));
+      showToast(t(`g.merge.${outcome.kind}`), "success", t("g.op.pull"));
     }
   }
 
@@ -132,7 +134,7 @@ export default function RepoScreen() {
   const onSync = () =>
     act("sync", () => repos.sync(id), (sum: SyncSummary) => {
       if (sum.pulled === "conflict") afterMerge({ kind: "conflict", merge: repos.get(id)?.merge ?? ({ conflicts: sum.conflicts } as any) });
-      else showAlert(t("g.op.sync"), describeSync(sum));
+      else showToast(describeSync(sum), "success", t("g.op.sync"));
     });
   const onFetch = () => act("fetch", () => repos.run(id, "fetch", (ctx) => engine.fetchRemote(ctx)));
   const onPull = () => act("pull", () => repos.withBusy(id, "pull", (onProgress) => pullContainer(id, onProgress)), afterMerge);
@@ -145,7 +147,7 @@ export default function RepoScreen() {
           if (!b) throw engine.codeError("NoBranch");
           await engine.pushRemote(ctx, b);
         }),
-      () => showAlert(t("g.op.push"), t("g.push.done"))
+      () => showToast(t("g.push.done"), "success", t("g.op.push"))
     );
 
   const changes = status ?? [];
@@ -231,9 +233,9 @@ export default function RepoScreen() {
           </Pressable>
         ) : null}
         {container.pendingRetry ? (
-          <View style={[s.banner, { borderColor: "#e3b341" }]}>
-            <Feather name="wifi-off" size={15} color="#e3b341" />
-            <Text style={[s.bannerText, { color: "#e3b341" }]}>{t("g.repo.retryBanner")}</Text>
+          <View style={[s.banner, { borderColor: C.warning }]}>
+            <Feather name="wifi-off" size={15} color={C.warning} />
+            <Text style={[s.bannerText, { color: C.warning }]}>{t("g.repo.retryBanner")}</Text>
           </View>
         ) : null}
         {loadError ? <Text style={{ color: colors.destructive, marginTop: 10, fontSize: 12 }}>{loadError}</Text> : null}

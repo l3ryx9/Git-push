@@ -19,6 +19,7 @@ import { aiReady } from "@/utils/ai/settings";
 import { dropSession, ensureSessionsLoaded, saveSession, sessions, sessionsReady, upsertSession, type UiItem } from "@/utils/ai/sessions";
 import { showConfirm } from "@/utils/dialogs";
 import { ctxFor, repoDir } from "@/utils/git/store";
+import { C } from "@/constants/colors";
 
 let seq = 0;
 const k = () => `i${Date.now()}-${seq++}`;
@@ -239,12 +240,22 @@ function AgentChatInner({ id, prompt, embedded, onPickRepo }: ChatProps) {
       history.current = out;
     } catch (e) {
       push({ key: k(), kind: "error", text: aiErrorText(e, t) });
-      // On retire le dernier message utilisateur sans réponse pour garder un historique valide.
-      const last = history.current[history.current.length - 1];
-      if (last?.role === "user") history.current = history.current.slice(0, -1);
+      keepPartial(e);
     } finally {
       finishRun(batch);
     }
+  }
+
+  /**
+   * Après une erreur / un arrêt : on garde ce que l'agent a déjà fait (fichiers écrits,
+   * résultats d'outils) pour qu'il ne le refasse pas au prochain message. Si rien n'a
+   * été fait, on retire le message utilisateur resté sans réponse.
+   */
+  function keepPartial(e: unknown) {
+    const partial = (e as { history?: AiMsg[] } | null)?.history;
+    if (Array.isArray(partial) && partial.length) history.current = partial;
+    const last = history.current[history.current.length - 1];
+    if (last?.role === "user") history.current = history.current.slice(0, -1);
   }
 
   async function runAutoFix() {
@@ -271,8 +282,7 @@ function AgentChatInner({ id, prompt, embedded, onPickRepo }: ChatProps) {
       push({ key: k(), kind: "assistant", text: `${res.ok ? "✅" : "⚠️"} ${t(res.reason, { n: res.attempts, max: CI_MAX_ATTEMPTS })}` });
     } catch (e) {
       push({ key: k(), kind: "error", text: aiErrorText(e, t) });
-      const last = history.current[history.current.length - 1];
-      if (last?.role === "user") history.current = history.current.slice(0, -1);
+      keepPartial(e);
     } finally {
       finishRun(batch);
     }
@@ -355,10 +365,10 @@ function AgentChatInner({ id, prompt, embedded, onPickRepo }: ChatProps) {
       return <Text style={{ color: colors.destructive, fontSize: 13, marginVertical: 6 }}>{item.text}</Text>;
     }
     if (item.kind === "tool") {
-      const color = item.status === "error" || item.status === "refused" ? colors.destructive : item.status === "running" ? "#e3b341" : colors.mutedForeground;
+      const color = item.status === "error" || item.status === "refused" ? colors.destructive : item.status === "running" ? C.warning : colors.mutedForeground;
       return (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 3 }}>
-          {item.status === "running" ? <ActivityIndicator size="small" color="#e3b341" /> : <Feather name={TOOL_ICON[item.call.name] ?? "tool"} size={13} color={color} />}
+          {item.status === "running" ? <ActivityIndicator size="small" color={C.warning} /> : <Feather name={TOOL_ICON[item.call.name] ?? "tool"} size={13} color={color} />}
           <Text style={{ flex: 1, color, fontFamily: MONO, fontSize: 11 }} numberOfLines={1}>
             {t(`ai.tool.${item.call.name}`)} {argLabel(item.call)}
             {item.status === "refused" ? ` — ${t("ai.refused")}` : item.status === "error" ? ` — ${item.output?.replace(/^ERREUR : /, "")}` : ""}
@@ -369,15 +379,15 @@ function AgentChatInner({ id, prompt, embedded, onPickRepo }: ChatProps) {
     // Validation d'une action
     const p = item.preview;
     return (
-      <View style={{ borderWidth: 1, borderColor: item.answer === undefined ? "#7c5cff" : colors.border, borderRadius: colors.radius, marginVertical: 8, overflow: "hidden", backgroundColor: colors.card }}>
+      <View style={{ borderWidth: 1, borderColor: item.answer === undefined ? C.ai : colors.border, borderRadius: colors.radius, marginVertical: 8, overflow: "hidden", backgroundColor: colors.card }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 11 }}>
-          <Feather name={TOOL_ICON[item.call.name] ?? "tool"} size={15} color="#a78bfa" />
+          <Feather name={TOOL_ICON[item.call.name] ?? "tool"} size={15} color={C.ai} />
           <Text style={{ flex: 1, color: colors.foreground, fontSize: 13, fontFamily: "Inter_600SemiBold" }} numberOfLines={2}>
             {t(`ai.action.${p.title}`)} {p.path ? <Text style={{ fontFamily: MONO, fontSize: 12 }}>{p.path}</Text> : null}
           </Text>
           {p.diff ? (
             <Text style={{ fontFamily: MONO, fontSize: 11 }}>
-              <Text style={{ color: "#56d364" }}>+{p.diff.adds}</Text> <Text style={{ color: "#f85149" }}>−{p.diff.dels}</Text>
+              <Text style={{ color: C.diffAdd }}>+{p.diff.adds}</Text> <Text style={{ color: C.diffDel }}>−{p.diff.dels}</Text>
             </Text>
           ) : null}
         </View>
@@ -389,7 +399,7 @@ function AgentChatInner({ id, prompt, embedded, onPickRepo }: ChatProps) {
                 {f.path}
               </Text>
               <Text style={{ fontFamily: MONO, fontSize: 11 }}>
-                <Text style={{ color: "#56d364" }}>+{f.diff.adds}</Text> <Text style={{ color: "#f85149" }}>−{f.diff.dels}</Text>
+                <Text style={{ color: C.diffAdd }}>+{f.diff.adds}</Text> <Text style={{ color: C.diffDel }}>−{f.diff.dels}</Text>
               </Text>
             </View>
             {item.answer === undefined ? <DiffBlock diff={f.diff} max={40} /> : null}
@@ -454,9 +464,9 @@ function AgentChatInner({ id, prompt, embedded, onPickRepo }: ChatProps) {
       {activeId !== id ? (
         <Pressable
           onPress={() => router.push({ pathname: "/repo/[id]", params: { id: activeId } } as any)}
-          style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 12, marginTop: 8, padding: 9, borderRadius: 10, borderWidth: 1, borderColor: "#7c5cff" }}
+          style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 12, marginTop: 8, padding: 9, borderRadius: 10, borderWidth: 1, borderColor: C.ai }}
         >
-          <Feather name="plus-square" size={14} color="#a78bfa" />
+          <Feather name="plus-square" size={14} color={C.ai} />
           <Text style={{ flex: 1, color: colors.foreground, fontSize: 12 }} numberOfLines={1}>
             {t("ai.activeRepo", { name: container.name })}
           </Text>
@@ -484,7 +494,7 @@ function AgentChatInner({ id, prompt, embedded, onPickRepo }: ChatProps) {
         }
       />
       {waitSec > 0 ? (
-        <Text style={{ color: "#e3b341", fontSize: 12, paddingHorizontal: 14, paddingBottom: 6 }}>{t("ai.waiting", { n: waitSec })}</Text>
+        <Text style={{ color: C.warning, fontSize: 12, paddingHorizontal: 14, paddingBottom: 6 }}>{t("ai.waiting", { n: waitSec })}</Text>
       ) : null}
       <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8, padding: 10, paddingBottom: embedded && !kbOpen ? insets.bottom + TAB_BAR + 4 : insets.bottom + 10, borderTopWidth: 1, borderColor: colors.border }}>
         <TextInput
@@ -508,7 +518,7 @@ function AgentChatInner({ id, prompt, embedded, onPickRepo }: ChatProps) {
         />
         <Pressable
           onPress={running ? stop : send}
-          style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: running ? colors.destructive : "#7c5cff" }}
+          style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: running ? colors.destructive : C.ai }}
         >
           <Feather name={running ? "square" : "arrow-up"} size={20} color="#fff" />
         </Pressable>

@@ -14,6 +14,7 @@ import { useI18n } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
 import { showAlert, showConfirm } from "@/utils/dialogs";
 import { hostOfUrl, removeAccount, type Account } from "@/utils/accounts";
+import { showToast } from "@/utils/toast";
 
 export default function AccountsScreen() {
   const colors = useColors();
@@ -93,7 +94,7 @@ export default function AccountsScreen() {
         onClose={() => setOauthOpen(false)}
         onToken={async (tok) => {
           const ok = await login(tok);
-          if (ok) showAlert("GitHub", t("f.oauth.connected"));
+          if (ok) showToast(t("f.oauth.connected"), "success", "GitHub");
           return ok;
         }}
       />

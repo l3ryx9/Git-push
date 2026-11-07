@@ -11,6 +11,7 @@ import { useColors } from "@/hooks/useColors";
 import { isBinary, unifiedDiff, type DiffResult } from "@/utils/git/diff";
 import * as engine from "@/utils/git/engine";
 import { decodeUtf8 } from "@/utils/git/fs";
+import { C } from "@/constants/colors";
 
 /** Diff d'un fichier entre deux révisions : oid de commit, « HEAD », « WORKDIR » ou vide (= absent). */
 export default function DiffScreen() {
@@ -70,7 +71,7 @@ export default function DiffScreen() {
             contentContainerStyle={{ paddingBottom: insets.bottom + 30 }}
             renderItem={({ item }) =>
               item.kind === "hunk" ? (
-                <Text style={{ color: "#79c0ff", backgroundColor: "#0d1d33", fontFamily: MONO, fontSize: 12, paddingVertical: 4, paddingHorizontal: 8 }}>
+                <Text style={{ color: C.info, backgroundColor: "#0d1d33", fontFamily: MONO, fontSize: 12, paddingVertical: 4, paddingHorizontal: 8 }}>
                   {item.text}
                 </Text>
               ) : (
@@ -88,7 +89,7 @@ export default function DiffScreen() {
                   </Text>
                   <Text
                     style={{
-                      color: item.t === 1 ? "#56d364" : item.t === -1 ? "#f85149" : colors.foreground,
+                      color: item.t === 1 ? C.diffAdd : item.t === -1 ? C.diffDel : colors.foreground,
                       fontFamily: MONO,
                       fontSize: 12,
                       lineHeight: 18,

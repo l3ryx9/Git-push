@@ -19,6 +19,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ToastHost } from "@/components/Toast";
 import colors from "@/constants/colors";
 import { GitHubProvider } from "@/context/GitHubContext";
 import { LanguageProvider } from "@/context/LanguageContext";
@@ -29,12 +30,24 @@ import { runSecretsMigration } from "@/utils/secretsMigration";
 SplashScreen.preventAutoHideAsync();
 installGlobalErrorLogging();
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  // Données GitHub : pas de rechargement en rafale à chaque retour sur un écran.
+  defaultOptions: { queries: { staleTime: 30000, retry: 1, refetchOnWindowFocus: false } },
+});
 
 function RootLayoutNav() {
   return (
     // contentStyle : même ton que le fond stylisé, pour éviter tout flash clair entre deux écrans.
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.dark.background } }}>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.dark.background },
+        // Glissement façon iOS sur les deux plateformes, avec retour par geste.
+        animation: "ios_from_right",
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true,
+      }}
+    >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="login" options={{ headerShown: false, animation: "fade" }} />
     </Stack>
@@ -72,6 +85,7 @@ export default function RootLayout() {
                 <GitHubProvider>
                   <ReposProvider>
                     <RootLayoutNav />
+                    <ToastHost />
                   </ReposProvider>
                 </GitHubProvider>
               </LanguageProvider>

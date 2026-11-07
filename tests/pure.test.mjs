@@ -158,3 +158,74 @@ test("createDirMemo : une écriture pendant un calcul empêche de réutiliser ce
   assert.equal(await second, "frais", "le nouveau calcul n'a pas réutilisé le résultat périmé");
   assert.equal(calls, 1);
 });
+
+// ─── Ajouts : édition robuste, contenu vérifié, secrets, budget d'historique ──
+
+import { contentProblem, fitHistory, isSensitivePath, maskSecrets, redactSecrets, unmaskSecrets, usesCrlf } from "../utils/ai/pure.ts";
+
+test("applyEdits tolère une indentation différente et garde celle du fichier", () => {
+  const file = "function a() {\n    if (x) {\n        go();\n    }\n}\n";
+  const r = applyEdits(file, { old_text: "if (x) {\n    go();\n}", new_text: "if (x) {\n    go();\n    done();\n}" });
+  assert.deepEqual(r, { text: "function a() {\n    if (x) {\n        go();\n        done();\n    }\n}\n" });
+});
+
+test("applyEdits conserve les fins de ligne CRLF", () => {
+  const r = applyEdits("a\r\nb\r\nc\r\n", { old_text: "b", new_text: "x\ny" });
+  assert.equal(r.text, "a\r\nx\r\ny\r\nc\r\n");
+  assert.equal(usesCrlf("a\r\nb\r\n"), true);
+  assert.equal(usesCrlf("a\nb\n"), false);
+});
+
+test("applyEdits indique les lignes en cas d'échec", () => {
+  assert.match(applyEdits("x = 1\ny = 2\nx = 1\n", { old_text: "x = 1", new_text: "z" }).error, /lignes 1, 3/);
+  assert.match(applyEdits("alpha\nconst value = compute();\n", { old_text: "const value = compute();\nreturn 1;", new_text: "z" }).error, /L2/);
+});
+
+test("contentProblem refuse un JSON cassé mais tolère tsconfig (JSONC)", () => {
+  assert.match(contentProblem("package.json", "{ \"a\": 1, }", "{}"), /JSON invalide/);
+  assert.equal(contentProblem("package.json", "{ \"a\": 1 }", "{}"), null);
+  assert.equal(contentProblem("tsconfig.json", "{ // commentaire\n }", "{}"), null);
+  assert.equal(contentProblem("data.json", "pas du json", "pas du json non plus"), null);
+});
+
+test("redactSecrets masque tokens, clés et mots de passe d'URL", () => {
+  const out = redactSecrets("push https://bob:hunter2secret@github.com/x.git ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123 sk-ant-abcdefghijklmnopqrstu AIzaSyA1234567890abcdefghijklmnopqrstuv");
+  assert.doesNotMatch(out, /hunter2|ghp_ABC|sk-ant-abc|AIzaSyA/);
+  assert.match(out, /bob:\[URL_PASSWORD masqué\]@github\.com/);
+});
+
+test("maskSecrets / unmaskSecrets : aller-retour sans perte", () => {
+  const vault = new Map();
+  const src = "API_KEY=abcdef1234567890XYZ\nconst k = process.env.API_KEY;\nTOKEN: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123\n";
+  const masked = maskSecrets(src, vault);
+  assert.doesNotMatch(masked, /abcdef1234567890XYZ|ghp_ABC/);
+  assert.match(masked, /process\.env\.API_KEY/);
+  assert.equal(maskSecrets(masked, vault), masked);
+  assert.deepEqual(unmaskSecrets(masked, vault), { text: src, missing: [] });
+  assert.deepEqual(unmaskSecrets("x __SECRET_00000000__", vault).missing, ["__SECRET_00000000__"]);
+});
+
+test("isSensitivePath repère les fichiers de secrets", () => {
+  for (const p of [".env", "app/.env.production", "release.keystore", "certs/server.pem", "id_ed25519", ".git-credentials"]) assert.equal(isSensitivePath(p), true, p);
+  for (const p of [".env.example", "id_ed25519.pub", "src/env.ts", "package.json", "keys.ts"]) assert.equal(isSensitivePath(p), false, p);
+});
+
+test("fitHistory tronque les anciens résultats et respecte le budget", () => {
+  const big = "x".repeat(5000);
+  const msgs = [];
+  for (let i = 0; i < 6; i++) {
+    msgs.push({ role: "user", text: `demande ${i}` });
+    msgs.push({ role: "assistant", text: "", calls: [{ id: `c${i}`, name: "write_file", args: {} }], raw: [{ type: "tool_use", id: `c${i}`, name: "write_file", input: { path: "a", content: big } }], provider: "anthropic" });
+    msgs.push({ role: "tool", results: [{ id: `c${i}`, name: "write_file", output: big }] });
+  }
+  const fitted = fitHistory(msgs, 2, 1e9);
+  assert.equal(fitted.length, msgs.length);
+  assert.ok(fitted[2].results[0].output.length < 1000);
+  assert.ok(fitted[1].raw[0].input.content.length < 1000);
+  assert.equal(fitted[fitted.length - 1].results[0].output.length, 5000);
+  assert.equal(fitted[fitted.length - 2].raw[0].input.content.length, 5000);
+  const small = fitHistory(msgs, 2, 20000);
+  assert.equal(small[0].role, "user");
+  assert.ok(JSON.stringify(small).length <= 20000 || small.length <= 3);
+  assert.match(small[0].text, /retiré/);
+});

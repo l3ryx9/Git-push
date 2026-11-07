@@ -23,6 +23,7 @@ import { useGitHub } from "@/context/GitHubContext";
 import { useI18n } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
 import { showConfirm } from "@/utils/dialogs";
+import { C } from "@/constants/colors";
 
 function Row({
   icon,
@@ -91,7 +92,7 @@ export default function SettingsScreen() {
   if (loading) return (
     <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
       <AppBackground />
-      <ActivityIndicator color="#00ff41" size="large" />
+      <ActivityIndicator color={C.accent} size="large" />
     </View>
   );
 

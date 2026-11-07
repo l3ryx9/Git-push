@@ -1,51 +1,73 @@
 // Thème Git-Push : encre vert-nuit + surfaces « verre » posées sur le fond
 // graphe de commits (assets/images/bg.webp, voir components/AppBackground).
+//
+// Principe : le fond graphe de commits est l'élément marquant ; tout le reste
+// reste sobre. L'ancien vert « néon » (#00ff41) est remplacé par un vert plus
+// doux, lisible longtemps, et chaque usage a sa couleur nommée (succès,
+// alerte, IA…) au lieu de codes couleur dispersés dans les écrans.
 const colors = {
   dark: {
-    text: "#e6efe9",
-    tint: "#00ff41",
+    text: "#e8f0ec",
+    tint: "#4be08f",
 
     // Couleur unie sous l'image de fond (identique à son ton dominant).
-    background: "#050c0b",
-    foreground: "#e6efe9",
+    background: "#060c0b",
+    foreground: "#e8f0ec",
 
     // Surfaces translucides : le fond reste visible à travers.
-    card: "rgba(12, 24, 21, 0.80)",
-    cardForeground: "#e6efe9",
+    card: "rgba(15, 27, 24, 0.82)",
+    cardForeground: "#e8f0ec",
     // Surfaces opaques : feuilles, boîtes de dialogue, barre d'onglets.
-    cardSolid: "#0c1714",
-    tabBar: "rgba(9, 19, 17, 0.95)",
+    cardSolid: "#0d1714",
+    // Surface surélevée (notifications, menus).
+    elevated: "#13211d",
+    tabBar: "rgba(10, 19, 17, 0.96)",
 
-    primary: "#00cc35",
-    primaryForeground: "#000000",
+    primary: "#38d27f",
+    primaryForeground: "#03140b",
 
     secondary: "rgba(255, 255, 255, 0.06)",
-    secondaryForeground: "#e6efe9",
+    secondaryForeground: "#e8f0ec",
 
     muted: "rgba(255, 255, 255, 0.05)",
-    mutedForeground: "#7f938b",
+    mutedForeground: "#8aa097",
 
-    accent: "#00ff41",
-    accentForeground: "#000000",
+    accent: "#4be08f",
+    accentForeground: "#03140b",
 
-    destructive: "#ff4d4d",
+    destructive: "#ff6b6b",
     destructiveForeground: "#ffffff",
+    destructiveBg: "rgba(255, 107, 107, 0.12)",
 
-    border: "rgba(160, 255, 200, 0.10)",
-    borderStrong: "rgba(0, 255, 65, 0.22)",
-    input: "rgba(0, 0, 0, 0.32)",
+    border: "rgba(170, 255, 210, 0.09)",
+    borderStrong: "rgba(75, 224, 143, 0.30)",
+    input: "rgba(0, 0, 0, 0.30)",
 
-    green: "#00ff41",
-    greenDim: "#00cc35",
-    greenBg: "rgba(0, 255, 65, 0.10)",
+    // Noms historiques (utilisés par les écrans) : alignés sur l'accent.
+    green: "#4be08f",
+    greenDim: "#38d27f",
+    greenBg: "rgba(75, 224, 143, 0.12)",
+
+    // Sens précis.
+    success: "#56d364",
+    warning: "#f0b94a",
+    warningBg: "rgba(240, 185, 74, 0.12)",
+    info: "#6cb6ff",
+    /** Tout ce qui relève de l'agent IA. */
+    ai: "#9d8cff",
+    aiBg: "rgba(157, 140, 255, 0.13)",
+    diffAdd: "#56d364",
+    diffDel: "#f85149",
 
     // Couleurs des voies du graphe (reprises dans l'interface).
     cyan: "#22d3ee",
     violet: "#a78bfa",
-    amber: "#e3b341",
-    blue: "#58a6ff",
+    amber: "#f0b94a",
+    blue: "#6cb6ff",
   },
-  radius: 12,
+  radius: 14,
+  radiusSm: 10,
+  radiusLg: 20,
 };
 
 /** "#22d3ee" + 0.12 → "rgba(34, 211, 238, 0.12)" */
@@ -56,3 +78,6 @@ export function withAlpha(hex: string, alpha: number): string {
 }
 
 export default colors;
+
+/** Jetons de couleur accessibles partout (y compris hors composant). */
+export const C = colors.dark;

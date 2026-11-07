@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import { GIT_I18N } from "@/constants/i18nGit";
 
@@ -679,12 +679,14 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     }).catch(() => {/**/});
   }, []);
 
-  function setLang(l: LangCode) {
+  const setLang = useCallback((l: LangCode) => {
     setLangState(l);
     AsyncStorage.setItem(LANG_KEY, l).catch(() => {/**/});
-  }
+  }, []);
 
-  function t(key: string, vars?: Record<string, string | number>): string {
+  // `t` et la valeur du contexte ne changent qu'avec la langue : les écrans ne se
+  // redessinent plus à chaque rendu du fournisseur.
+  const t = useCallback((key: string, vars?: Record<string, string | number>): string => {
     // Textes des écrans Git (fr + en) : les autres langues retombent sur l'anglais.
     const git = GIT_I18N[lang] ?? (lang === "fr" ? GIT_I18N.fr : GIT_I18N.en);
     let str = DICTS[lang][key] ?? git[key] ?? (lang !== "fr" ? GIT_I18N.en[key] : undefined) ?? DICTS.fr[key] ?? GIT_I18N.fr[key] ?? key;
@@ -694,10 +696,12 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       }
     }
     return str;
-  }
+  }, [lang]);
+
+  const value = useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);
 
   return (
-    <LanguageContext.Provider value={{ lang, setLang, t }}>
+    <LanguageContext.Provider value={value}>
       {children}
     </LanguageContext.Provider>
   );

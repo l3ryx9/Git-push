@@ -14,6 +14,7 @@ import { showConfirm } from "@/utils/dialogs";
 import { clearErrors, readErrors, type ErrorEntry } from "@/utils/errorLog";
 import { measureUsage, removeOrphans, type Usage } from "@/utils/git/storage";
 import { secretsStatus } from "@/utils/secrets";
+import { C } from "@/constants/colors";
 
 type FeatherName = React.ComponentProps<typeof Feather>["name"];
 
@@ -127,7 +128,7 @@ export default function MaintenanceScreen() {
       <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: insets.bottom + 40 }}>
         {/* Bilan */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: todo.length ? "#2a2208" : colors.greenBg, borderRadius: colors.radius, padding: 14, marginBottom: 12 }}>
-          <Feather name={todo.length ? "alert-circle" : "check-circle"} size={26} color={todo.length ? "#e3b341" : colors.primary} />
+          <Feather name={todo.length ? "alert-circle" : "check-circle"} size={26} color={todo.length ? C.warning : colors.primary} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: colors.foreground, fontSize: 15, fontFamily: "Inter_700Bold" }}>
               {todo.length ? t("maint.healthTodo", { n: todo.length }) : t("maint.healthOk")}
@@ -145,7 +146,7 @@ export default function MaintenanceScreen() {
           t("maint.sec.title"),
           t("maint.sec.hint"),
           sec ? (
-            <Text style={{ color: sec.secure && !sec.degraded ? colors.primary : "#e3b341", fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
+            <Text style={{ color: sec.secure && !sec.degraded ? colors.primary : C.warning, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
               {sec.secure && !sec.degraded ? `✓ ${t("maint.sec.ok")}` : `⚠ ${t("maint.sec.degraded")}`}
             </Text>
           ) : (
@@ -165,7 +166,7 @@ export default function MaintenanceScreen() {
                 {usage.repos.map((r) => line(r.name, fmtBytes(r.bytes), undefined, () => deleteRepo(r.id, r.name)))}
                 {usage.orphans.length ? (
                   <View style={{ marginTop: 10 }}>
-                    {line(t("maint.sto.orphansLabel"), fmtBytes(usage.orphans.reduce((n, o) => n + o.bytes, 0)), "#e3b341")}
+                    {line(t("maint.sto.orphansLabel"), fmtBytes(usage.orphans.reduce((n, o) => n + o.bytes, 0)), C.warning)}
                     <Btn label={t("maint.sto.free")} icon="trash-2" onPress={freeOrphans} style={{ marginTop: 8 }} />
                   </View>
                 ) : null}

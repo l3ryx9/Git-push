@@ -25,6 +25,7 @@ import { useI18n } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
 import { createBatchPusher, SPLIT_ABOVE_B64, type BatchSummary } from "@/utils/batchPush";
 import { showAlert, showConfirm } from "@/utils/dialogs";
+import { C } from "@/constants/colors";
 
 interface SelectedFile {
   name: string;
@@ -93,7 +94,7 @@ export default function FilesScreen() {
   if (loading) return (
     <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
       <AppBackground />
-      <ActivityIndicator color="#00ff41" size="large" />
+      <ActivityIndicator color={C.accent} size="large" />
     </View>
   );
 

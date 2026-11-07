@@ -6,7 +6,7 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 
-import { applyEdits, fmtBytes, summarizeTree } from "@/utils/ai/pure";
+import { applyEdits, fmtBytes, redactSecrets, summarizeTree } from "@/utils/ai/pure";
 import { loadAi } from "@/utils/ai/settings";
 import { lintWorkflow, workflowTemplate } from "@/utils/ai/workflows";
 import { readErrors } from "@/utils/errorLog";
@@ -117,5 +117,6 @@ export async function buildReport(checks: Check[], usage: Usage | null, labels: 
     `Erreurs récentes (${errors.length}) :`,
     ...errors.slice(0, 8).map((e) => `- ${new Date(e.at).toISOString()} [${e.source}] ${e.message}`),
   ];
-  return lines.filter((l, i) => l !== "" || i > 0).join("\n");
+  // Dernier filet : aucun secret ne doit partir dans un rapport partagé.
+  return redactSecrets(lines.filter((l, i) => l !== "" || i > 0).join("\n"));
 }

@@ -7,6 +7,8 @@ import { fetch as expoFetch } from "expo/fetch";
 
 import { Native } from "../native";
 
+import { isPrivateHost } from "./store";
+
 type Body = Uint8Array | Iterable<Uint8Array> | AsyncIterable<Uint8Array> | undefined | null;
 
 async function collect(body: Body): Promise<Uint8Array | undefined> {
@@ -37,6 +39,22 @@ async function collect(body: Body): Promise<Uint8Array | undefined> {
   return out;
 }
 
+/**
+ * Refuse d'envoyer un mot de passe / token en clair (http://) vers Internet :
+ * n'importe quel intermédiaire (Wi-Fi public, opérateur) pourrait le lire.
+ * Le réseau local (LAN, VPN) reste autorisé pour les serveurs auto-hébergés.
+ */
+function guardTransport(url: string, headers: Record<string, string>) {
+  if (!/^http:\/\//i.test(url)) return;
+  const hasAuth = Object.keys(headers).some((k) => k.toLowerCase() === "authorization");
+  if (!hasAuth) return;
+  const host = /^http:\/\/(?:[^@/]+@)?([^/:]+)/i.exec(url)?.[1] ?? "";
+  if (isPrivateHost(host)) return;
+  const e = new Error(`Connexion non chiffrée (http://) vers ${host} : identifiants non envoyés`) as Error & { code: string };
+  e.code = "InsecureTransport";
+  throw e;
+}
+
 export const http = {
   async request({
     url,
@@ -49,6 +67,7 @@ export const http = {
     headers?: Record<string, string>;
     body?: Body;
   }) {
+    guardTransport(url, headers);
     const data = await collect(body);
     const res = await expoFetch(url, { method, headers, body: data as any });
     const buffer = new Uint8Array(await res.arrayBuffer());
@@ -89,6 +108,7 @@ export const httpInsecure = {
       e.code = "NativeUnavailable";
       throw e;
     }
+    guardTransport(url, headers);
     const data = await collect(body);
     const bodyBase64 = data ? Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("base64") : "";
     const res = await Native.httpRequest(url, method, headers, bodyBase64, true);

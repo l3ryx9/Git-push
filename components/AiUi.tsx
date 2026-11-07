@@ -12,6 +12,7 @@ import { aiErrorText } from "@/utils/ai/providers";
 import { aiReady, loadAi, PROVIDERS, subscribeAi, type AiSettings } from "@/utils/ai/settings";
 import { showAlert } from "@/utils/dialogs";
 import type { DiffResult } from "@/utils/git/diff";
+import { C } from "@/constants/colors";
 
 export function useAiSettings(): AiSettings | null {
   const [s, setS] = useState<AiSettings | null>(null);
@@ -71,12 +72,12 @@ export function AiButton({
       onPress={press}
       hitSlop={8}
       style={({ pressed }) => [
-        { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: label ? 10 : 6, paddingVertical: 5, borderRadius: 14, borderWidth: label ? 1 : 0, borderColor: "#7c5cff" },
+        { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: label ? 10 : 6, paddingVertical: 5, borderRadius: 14, borderWidth: label ? 1 : 0, borderColor: C.ai },
         pressed && { opacity: 0.6 },
       ]}
     >
-      {busy ? <ActivityIndicator size="small" color="#a78bfa" /> : <Feather name="zap" size={size - 3} color="#a78bfa" />}
-      {label ? <Text style={{ color: "#a78bfa", fontSize: 12, fontFamily: "Inter_600SemiBold" }}>{label}</Text> : null}
+      {busy ? <ActivityIndicator size="small" color={C.ai} /> : <Feather name="zap" size={size - 3} color={C.ai} />}
+      {label ? <Text style={{ color: C.ai, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>{label}</Text> : null}
     </Pressable>
   );
 }
@@ -93,14 +94,14 @@ export function DiffBlock({ diff, max = 300 }: { diff: DiffResult; max?: number 
       <View style={{ paddingVertical: 4 }}>
         {rows.map((r, i) =>
           r.kind === "hunk" ? (
-            <Text key={i} style={{ color: "#79c0ff", backgroundColor: "#0d1d33", fontFamily: MONO, fontSize: 11, paddingHorizontal: 8, lineHeight: 16 }}>
+            <Text key={i} style={{ color: C.info, backgroundColor: "#0d1d33", fontFamily: MONO, fontSize: 11, paddingHorizontal: 8, lineHeight: 16 }}>
               {r.text}
             </Text>
           ) : (
             <Text
               key={i}
               style={{
-                color: r.t === 1 ? "#56d364" : r.t === -1 ? "#f85149" : colors.mutedForeground,
+                color: r.t === 1 ? C.diffAdd : r.t === -1 ? C.diffDel : colors.mutedForeground,
                 backgroundColor: r.t === 1 ? "#0f2a17" : r.t === -1 ? "#2d1215" : "transparent",
                 fontFamily: MONO,
                 fontSize: 11,
@@ -116,7 +117,7 @@ export function DiffBlock({ diff, max = 300 }: { diff: DiffResult; max?: number 
         {diff.rows.length > limit ? (
           limit < max ? (
             <Pressable onPress={() => setShown(limit + 300)} style={{ padding: 10 }}>
-              <Text style={{ color: "#a78bfa", fontSize: 12, fontFamily: "Inter_600SemiBold" }}>{t("ai.showMore", { n: Math.min(300, diff.rows.length - limit) })}</Text>
+              <Text style={{ color: C.ai, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>{t("ai.showMore", { n: Math.min(300, diff.rows.length - limit) })}</Text>
             </Pressable>
           ) : (
             <Text style={{ color: colors.mutedForeground, fontSize: 11, padding: 8 }}>… +{diff.rows.length - limit}</Text>
@@ -149,14 +150,14 @@ export function DiffApprovalModal({
       <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top + 8 }}>
         <AppBackground />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingBottom: 10, borderBottomWidth: 1, borderColor: colors.border }}>
-          <Feather name="zap" size={18} color="#a78bfa" />
+          <Feather name="zap" size={18} color={C.ai} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: colors.foreground, fontSize: 15, fontFamily: "Inter_700Bold" }} numberOfLines={1}>
               {title}
             </Text>
             {diff ? (
               <Text style={{ fontFamily: MONO, fontSize: 11 }}>
-                <Text style={{ color: "#56d364" }}>+{diff.adds}</Text> <Text style={{ color: "#f85149" }}>−{diff.dels}</Text>
+                <Text style={{ color: C.diffAdd }}>+{diff.adds}</Text> <Text style={{ color: C.diffDel }}>−{diff.dels}</Text>
               </Text>
             ) : null}
           </View>

@@ -153,6 +153,35 @@ export function hostOf(url: string): string {
   return m ? m[1].toLowerCase() : "";
 }
 
+/**
+ * Sépare les identifiants glissés dans une URL (https://user:token@hôte/…) :
+ * ils ne doivent jamais être enregistrés en clair avec la liste des dépôts.
+ */
+export function splitUrlCredentials(raw: string): { url: string; username?: string; password?: string } {
+  const m = /^([a-z][a-z0-9+.-]*:\/\/)([^/@\s]+)@(.+)$/i.exec(raw.trim());
+  if (!m) return { url: raw.trim() };
+  const [user, ...rest] = m[2].split(":");
+  const dec = (v: string) => {
+    try {
+      return decodeURIComponent(v);
+    } catch {
+      return v;
+    }
+  };
+  return { url: m[1] + m[3], username: user ? dec(user) : undefined, password: rest.length ? dec(rest.join(":")) : undefined };
+}
+
+/** Hôte du réseau local (LAN, VPN) : seul cas où des identifiants peuvent passer en http:// non chiffré. */
+export function isPrivateHost(host: string): boolean {
+  const h = host.toLowerCase();
+  if (h === "localhost" || h.endsWith(".local") || h.endsWith(".lan") || h.endsWith(".home.arpa") || h.endsWith(".ts.net")) return true;
+  const ip = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(h);
+  if (!ip) return false;
+  const a = Number(ip[1]);
+  const b = Number(ip[2]);
+  return a === 10 || a === 127 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || (a === 100 && b >= 64 && b <= 127);
+}
+
 export function repoNameFromUrl(url: string): string {
   const clean = url.trim().replace(/\/+$/, "").replace(/\.git$/i, "");
   return clean.split("/").pop() || "repo";

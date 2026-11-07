@@ -2,7 +2,7 @@
   "expo": {
     "name": "Git-Push",
     "slug": "git-agend",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "gitcrush",
@@ -18,7 +18,8 @@
       "bundleIdentifier": "com.gitpush.app"
     },
     "android": {
-      "package": "com.gitpush.app"
+      "package": "com.gitpush.app",
+      "allowBackup": false
     },
     "web": {
       "favicon": "./assets/images/icon.png"

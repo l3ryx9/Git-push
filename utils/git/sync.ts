@@ -7,6 +7,8 @@
  */
 import { AppState } from "react-native";
 
+import { redactSecrets } from "../ai/pure";
+import { logError } from "../errorLog";
 import { reportSyncToWidget } from "../native";
 import * as engine from "./engine";
 import type { MergeOutcome, Progress, SyncSummary } from "./engine";
@@ -55,8 +57,9 @@ export async function syncContainer(id: string, reason: SyncReason, onProgress?:
     } catch (e: any) {
       reportSyncToWidget(false);
       const network = engine.isNetworkError(e);
+      if (!network) void logError(`sync:${reason}`, e);
       await updateContainer(id, (cur) => ({
-        lastSync: { at: Date.now(), ok: false, reason, error: String(e?.message ?? e).slice(0, 300) },
+        lastSync: { at: Date.now(), ok: false, reason, error: redactSecrets(String(e?.message ?? e)).slice(0, 300) },
         pendingRetry: network && cur.sync.retryOnNetwork ? true : cur.pendingRetry,
       }));
       throw e;

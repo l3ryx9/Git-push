@@ -2,10 +2,12 @@ import { Feather, Octicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { Tabs } from "expo-router";
 import React from "react";
+import * as Haptics from "expo-haptics";
 import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAiSettings } from "@/components/AiUi";
+import { withAlpha } from "@/constants/colors";
 import { TAB_BAR_GAP, TAB_BAR_HEIGHT } from "@/constants/layout";
 import { useI18n } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
@@ -18,12 +20,12 @@ function TabIcon({ focused, children }: { focused: boolean; children: React.Reac
   return (
     <View
       style={{
-        width: 48,
+        width: 52,
         height: 30,
         borderRadius: 15,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: focused ? colors.greenBg : "transparent",
+        backgroundColor: focused ? withAlpha("#4be08f", 0.16) : "transparent",
       }}
     >
       {children}
@@ -40,8 +42,18 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      screenListeners={{
+        tabPress: () => {
+          Haptics.selectionAsync().catch(() => undefined);
+        },
+      }}
       screenOptions={{
         headerShown: false,
+        // Onglets masqués « gelés » : ils ne se redessinent plus à chaque mise à jour
+        // (progression d'une synchro, liste des dépôts…), l'onglet visible reste fluide.
+        freezeOnBlur: true,
+        lazy: true,
+        animation: "shift",
         // Le fond de chaque écran est dessiné par l'écran lui-même (AppBackground).
         sceneStyle: { backgroundColor: colors.background },
         tabBarHideOnKeyboard: true,
@@ -79,7 +91,7 @@ export default function TabLayout() {
         ),
         tabBarLabelStyle: {
           fontFamily: "Inter_600SemiBold",
-          fontSize: 10.5,
+          fontSize: 11,
           marginTop: 2,
         },
       }}

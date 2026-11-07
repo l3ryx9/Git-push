@@ -10,6 +10,7 @@ import { useColors } from "@/hooks/useColors";
 import { aiErrorText, complete } from "@/utils/ai/providers";
 import { DEFAULT_AI, loadAi, PROVIDERS, saveAi, usageToday, type AiProvider, type AiSettings } from "@/utils/ai/settings";
 import { showAlert } from "@/utils/dialogs";
+import { showToast } from "@/utils/toast";
 
 export default function AiSettingsScreen() {
   const colors = useColors();
@@ -36,7 +37,7 @@ export default function AiSettingsScreen() {
     setTesting(true);
     try {
       const out = await complete(s, "Réponds en un seul mot.", "Dis « OK ».");
-      showAlert(t("ai.test"), `${t("ai.testOk")}\n\n${info.label} · ${s.models[p]} : ${out.slice(0, 80)}`);
+      showToast(`${info.label} · ${s.models[p]} : ${out.slice(0, 80)}`, "success", t("ai.testOk"));
       usageToday().then(setUsed);
     } catch (e) {
       showAlert(t("ai.test"), aiErrorText(e, t));
