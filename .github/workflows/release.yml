@@ -21,6 +21,10 @@ on:
         description: "Marquer comme pré-version"
         type: boolean
         default: false
+      random_signature:
+        description: "Signature aléatoire (keystore jetable, aucun secret requis)"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -64,4 +68,6 @@ jobs:
       publish: true
       tag: ${{ needs.version.outputs.tag }}
       prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+      # Sur un tag poussé (pas de formulaire) : signature aléatoire par défaut.
+      random_signature: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.random_signature == 'true' }}
     secrets: inherit
