@@ -439,8 +439,9 @@ export function Btn({
 }) {
   const colors = useColors();
   const bg =
-    variant === "primary" ? colors.primary : variant === "danger" ? colors.destructiveBg : variant === "ghost" ? "transparent" : colors.secondary;
-  const fg = variant === "primary" ? colors.primaryForeground : variant === "danger" ? colors.destructive : colors.foreground;
+    variant === "primary" ? colors.primary : variant === "danger" ? colors.destructiveSolid : variant === "ghost" ? "transparent" : colors.secondary;
+  // Boutons pleins et vifs : vert (texte foncé) pour l'action principale, rouge (texte blanc) pour la destruction.
+  const fg = variant === "primary" ? colors.primaryForeground : variant === "danger" ? colors.destructiveForeground : colors.foreground;
   const border = variant === "danger" ? withAlpha(colors.destructive, 0.35) : variant === "ghost" ? "transparent" : colors.border;
   return (
     <PressableScale
@@ -459,7 +460,7 @@ export function Btn({
           gap: space.sm,
           backgroundColor: bg,
           borderRadius: radius.md,
-          borderWidth: variant === "primary" ? 0 : 1,
+          borderWidth: variant === "primary" || variant === "danger" ? 0 : 1,
           borderColor: border,
           paddingHorizontal: small ? space.md : space.lg,
           // Même en petit format, la zone tactile reste à 44 px minimum.

@@ -23,7 +23,8 @@ const colors = {
     elevated: "#172821",
     tabBar: "rgba(12, 22, 19, 0.98)",
 
-    primary: "#38d27f",
+    // Vert des boutons principaux : saturé à 100 % (texte foncé à 11,5:1).
+    primary: "#00e865",
     primaryForeground: "#03140b",
 
     secondary: "rgba(255, 255, 255, 0.06)",
@@ -38,8 +39,8 @@ const colors = {
     destructive: "#ff6b6b",
     destructiveForeground: "#ffffff",
     destructiveBg: "rgba(255, 107, 107, 0.12)",
-    /** Fond PLEIN d'un bouton destructif : texte blanc à 4,5:1 (le rouge clair ne donnait que 2,8:1). */
-    destructiveSolid: "#d4363b",
+    /** Fond PLEIN des boutons destructifs : rouge vif, texte blanc à 4,8:1 (le rouge clair ne donnait que 2,8:1). */
+    destructiveSolid: "#e3121f",
 
     border: "rgba(190, 230, 210, 0.14)",
     borderStrong: "rgba(75, 224, 143, 0.38)",

@@ -1,3 +1,9 @@
+# Boutons plus vifs — 12 novembre 2026
+
+- Vert des boutons principaux saturé à 100 % (#00e865, texte foncé à 11,5:1).
+- Boutons destructifs : rouge vif plein (#e3121f, texte blanc à 4,8:1), y compris la variante « danger » qui était un simple fond teinté.
+- Thème sombre uniquement : le thème clair est écarté.
+
 # Refonte de l'interface — 12 novembre 2026
 
 Rapport : `docs/AUDIT_UI_2026-11-12.md`.

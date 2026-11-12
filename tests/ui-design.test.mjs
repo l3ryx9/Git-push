@@ -126,3 +126,20 @@ test("régression : PickerModal a accès à la traduction pour son bouton Fermer
   const src = read("components/PickerModal.tsx");
   assert.match(src, /const \{ t \} = useI18n\(\);/);
 });
+
+function saturation(hex) {
+  const n = hex.replace("#", "");
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(n.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  return max === 0 ? 0 : (max - Math.min(r, g, b)) / max;
+}
+
+test("boutons vert et rouge vifs, sans perdre la lisibilité", () => {
+  assert.ok(saturation(C.primary) >= 0.95, `vert ${C.primary}`);
+  assert.ok(saturation(C.destructiveSolid) >= 0.9, `rouge ${C.destructiveSolid}`);
+  assert.ok(contrast(C.primaryForeground, C.primary) >= 7);
+  assert.ok(contrast(C.destructiveForeground, C.destructiveSolid) >= 4.5);
+  const ui = read("components/GitUi.tsx");
+  assert.match(ui, /variant === "danger" \? colors\.destructiveSolid/);
+  assert.match(ui, /variant === "danger" \? colors\.destructiveForeground/);
+});
