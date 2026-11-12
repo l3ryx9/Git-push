@@ -214,7 +214,7 @@ export default function EditorScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <AppBackground />
-      <ScreenHeader title={name + (dirty ? " •" : "")} subtitle={path} right={right} onBack={() => router.back()} />
+      <ScreenHeader art="editor" title={name + (dirty ? " •" : "")} subtitle={path} right={right} onBack={() => router.back()} />
       {loading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 30 }} />
       ) : isImage ? (

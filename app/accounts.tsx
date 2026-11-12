@@ -47,7 +47,7 @@ export default function AccountsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppBackground />
-      <ScreenHeader title={t("f.accounts.title")} right={<IconBtn icon="plus" onPress={() => router.push("/account-add" as any)} />} />
+      <ScreenHeader art="account" title={t("f.accounts.title")} right={<IconBtn icon="plus" onPress={() => router.push("/account-add" as any)} />} />
       <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: insets.bottom + 30 }}>
         <SectionTitle>GITHUB</SectionTitle>
         <Card style={{ padding: 14, gap: 12 }}>

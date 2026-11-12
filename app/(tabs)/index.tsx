@@ -388,7 +388,9 @@ export default function HomeScreen() {
             <Text style={s.heroHello} numberOfLines={2}>{t("hx.greeting", { name: firstName })}</Text>
             <Text style={s.heroTag}>{t("hm.tagline")}</Text>
           </View>
-          <HeroGraph width={112} height={82} />
+          <View style={s.heroNetwork}>
+            <HeroGraph width={112} height={82} />
+          </View>
         </View>
 
         {/* ── Mes raccourcis ── */}
@@ -783,6 +785,14 @@ function makeStyles(colors: Colors) {
       overflow: "hidden",
     },
     heroHello: { fontSize: 24, lineHeight: 30, color: colors.foreground, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+    heroNetwork: {
+      width: 112,
+      height: 82,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 20,
+      backgroundColor: withAlpha(colors.cyan, 0.055),
+    },
     heroTag: { marginTop: 6, fontSize: 13.5, lineHeight: 19, color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
 
     grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },

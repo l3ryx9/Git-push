@@ -59,7 +59,7 @@ export default function AiSettingsScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <AppBackground />
-      <ScreenHeader title={t("ai.settings")} />
+      <ScreenHeader art="ai" title={t("ai.settings")} />
       <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled">
         <Card>
           {row(t("ai.enabled"), s.enabled, (v) => void patch({ enabled: v }), t("ai.enabledHint"))}

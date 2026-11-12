@@ -49,7 +49,7 @@ export function HomeSection({
 
 /**
  * Grande carte de raccourci : illustration, titre court, petite description.
- * Toute la carte est cliquable (≥ 148 px de haut, bien au-delà des 48 px recommandés).
+ * Toute la carte est cliquable ; toutes les cartes utilisent une hauteur fixe identique de 190 px.
  */
 export function ShortcutCard({
   kind,
@@ -81,7 +81,7 @@ export function ShortcutCard({
       style={{ width }}
       contentStyle={({ pressed }) => [
         {
-          minHeight: 148,
+          height: 190,
           borderRadius: 22,
           padding: 14,
           backgroundColor: colors.card,
@@ -110,10 +110,10 @@ export function ShortcutCard({
           </View>
         ) : null}
       </View>
-      <Text numberOfLines={2} style={{ marginTop: 12, fontSize: 15.5, color: colors.foreground, fontFamily: "Inter_700Bold", letterSpacing: -0.2 }}>
+      <Text numberOfLines={2} style={{ marginTop: 12, height: 38, fontSize: 15.5, lineHeight: 19, color: colors.foreground, fontFamily: "Inter_700Bold", letterSpacing: -0.2 }}>
         {title}
       </Text>
-      <Text numberOfLines={2} style={{ marginTop: 2, fontSize: 12.5, lineHeight: 17, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+      <Text numberOfLines={2} style={{ marginTop: 2, height: 34, fontSize: 12.5, lineHeight: 17, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
         {sub}
       </Text>
     </PressableScale>

@@ -48,7 +48,7 @@ export default function CommitScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppBackground />
-      <ScreenHeader title={t("g.commit.details")} subtitle={oid?.slice(0, 12)} />
+      <ScreenHeader art="commit" title={t("g.commit.details")} subtitle={oid?.slice(0, 12)} />
       {error ? (
         <Text style={{ color: colors.destructive, padding: 20 }}>{error}</Text>
       ) : !info ? (

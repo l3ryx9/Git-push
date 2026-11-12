@@ -86,7 +86,7 @@ export default function AccountAddScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <AppBackground />
-      <ScreenHeader title={t("f.accounts.add")} />
+      <ScreenHeader art="account" title={t("f.accounts.add")} />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled">
         <SectionTitle>{t("f.add.forge")}</SectionTitle>
         <Segmented

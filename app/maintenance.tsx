@@ -124,7 +124,7 @@ export default function MaintenanceScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppBackground />
-      <ScreenHeader title={t("maint.title")} />
+      <ScreenHeader art="settings" title={t("maint.title")} />
       <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: insets.bottom + 40 }}>
         {/* Bilan */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: todo.length ? "#2a2208" : colors.greenBg, borderRadius: colors.radius, padding: 14, marginBottom: 12 }}>

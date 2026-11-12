@@ -51,7 +51,7 @@ export default function ForgeListScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppBackground />
-      <ScreenHeader
+      <ScreenHeader art="forge"
         title={kindLabel(kind, ref, t)}
         subtitle={ref.project}
         right={<IconBtn icon="plus" onPress={() => goForge("new", ref, { kind })} />}

@@ -61,7 +61,7 @@ export default function ForgeNewScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <AppBackground />
-      <ScreenHeader title={kind === "issues" ? t("f.new.issue") : ref.provider === "gitlab" ? t("f.new.mr") : t("f.new.pr")} subtitle={ref.project} />
+      <ScreenHeader art="forge" title={kind === "issues" ? t("f.new.issue") : ref.provider === "gitlab" ? t("f.new.mr") : t("f.new.pr")} subtitle={ref.project} />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled">
         <Field label={t("f.new.title")} value={title} onChangeText={setTitle} />
         <View style={{ flexDirection: "row", justifyContent: "flex-end", marginBottom: -4 }}>

@@ -140,7 +140,7 @@ export default function NativeSyncScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppBackground />
-      <ScreenHeader title={t("n.advanced.title")} />
+      <ScreenHeader art="sync" title={t("n.advanced.title")} />
       <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: insets.bottom + 40 }}>
         {!Native ? (
           <Card style={{ padding: 14 }}>

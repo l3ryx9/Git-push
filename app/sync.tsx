@@ -85,7 +85,7 @@ export default function SyncIntentScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppBackground />
-      <ScreenHeader title={t("g.intent.title")} onBack={() => router.replace("/(tabs)/repos" as any)} />
+      <ScreenHeader art="sync" title={t("g.intent.title")} onBack={() => router.replace("/(tabs)/repos" as any)} />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 30, gap: 12 }}>
         {!ready ? <ActivityIndicator color={colors.accent} /> : null}
         {lines.map((l, i) => (

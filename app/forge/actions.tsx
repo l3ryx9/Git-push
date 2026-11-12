@@ -43,7 +43,7 @@ export default function ActionsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppBackground />
-      <ScreenHeader title="GitHub Actions" subtitle={ref.project} />
+      <ScreenHeader art="forge" title="GitHub Actions" subtitle={ref.project} />
       {runs === null ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 30 }} />
       ) : (

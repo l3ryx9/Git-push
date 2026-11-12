@@ -75,6 +75,17 @@ pkg.dependencies     = cleanDeps(pkg.dependencies,     'dep');
 pkg.devDependencies  = cleanDeps(pkg.devDependencies,  'devDep');
 pkg.peerDependencies = cleanDeps(pkg.peerDependencies, 'peerDep');
 
+// Fail closed: never replace an unknown catalog entry with "latest".
+// That would make CI resolve an unreviewed version and can silently change
+// the code being built between runs.
+if (catalogUnknown.length > 0) {
+  fs.writeFileSync(PKG_PATH, raw, 'utf8');
+  console.error('\\n❌ Références catalog: sans version approuvée :');
+  catalogUnknown.forEach((item) => console.error(`   - ${item}`));
+  console.error('Ajoute une version exacte ou une plage vérifiée dans CATALOG_VERSIONS.');
+  process.exit(1);
+}
+
 // Supprimer les champs spécifiques aux workspaces
 delete pkg.workspaces;
 

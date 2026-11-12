@@ -88,7 +88,7 @@ export default function RepoSettingsScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <AppBackground />
-      <ScreenHeader title={t("g.nav.settings")} subtitle={container.name} />
+      <ScreenHeader art="settings" title={t("g.nav.settings")} subtitle={container.name} />
       <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled">
         <SectionTitle>{t("g.settings.general")}</SectionTitle>
         <Field label={t("g.clone.name")} value={name} onChangeText={setName} />

@@ -13,8 +13,8 @@
  *
  * Comportement :
  *  - Si aucun keystore n'est présent (android/app/release.keystore),
- *    ne fait rien : l'APK release reste signé en debug (utile pour les
- *    builds de test sans configurer de vrai keystore).
+ *    ne fait rien : seul un build de test non publié peut rester signé en debug.
+ *    Le workflow bloque toute publication sans keystore de production.
  *  - Si le keystore est présent mais que le build.gradle n'a pas la forme
  *    attendue (changement de version d'Expo, etc.), échoue BRUYAMMENT
  *    plutôt que de produire un APK mal signé sans prévenir.
@@ -28,8 +28,15 @@ const GRADLE_PATH = path.join(ANDROID_APP_DIR, 'build.gradle');
 const KEYSTORE_PATH = path.join(ANDROID_APP_DIR, 'release.keystore');
 
 if (!fs.existsSync(KEYSTORE_PATH)) {
-  console.log('ℹ️  Pas de keystore release trouvé — l\'APK release restera signé avec le keystore de debug.');
+  console.log('ℹ️  Pas de keystore release trouvé — ce build reste un build de test signé en debug.');
   process.exit(0);
+}
+
+const requiredSigningEnv = ["ANDROID_STORE_PASSWORD", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD"];
+const missingSigningEnv = requiredSigningEnv.filter((key) => !process.env[key]);
+if (missingSigningEnv.length > 0) {
+  console.error(`❌ Secrets de signature manquants : ${missingSigningEnv.join(", ")}.`);
+  process.exit(1);
 }
 
 if (!fs.existsSync(GRADLE_PATH)) {

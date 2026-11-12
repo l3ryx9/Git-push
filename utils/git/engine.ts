@@ -11,6 +11,8 @@ import { createDirMemo } from "@/utils/ai/pure";
 import { hasConflictMarkers, isBinary, merge3 } from "./diff";
 import { decodeUtf8, encodeUtf8, fs, onRepoWrite, pathExists, readBytes, removePath, writeBytesDeep } from "./fs";
 import { http, httpInsecure } from "./http";
+import { buildGitGraph, type GitGraphData } from "./graphPure";
+export type { GraphCommit, GitGraphData } from "./graphPure";
 
 export type Author = { name: string; email: string };
 export type Creds = { username: string; password: string } | null;
@@ -330,6 +332,7 @@ export async function pushRemote(
     remoteRef: opts.remoteRef,
     force: !!opts.force,
     delete: !!opts.delete,
+    onProgress: ctx.onProgress,
     cache: cacheFor(ctx.dir),
     ...remoteOpts(ctx),
   });
@@ -660,6 +663,29 @@ const abMemo = new Map<string, { ahead: number; behind: number; upstream: boolea
 // ─── Historique / diffs ───────────────────────────────────────────────────────
 
 export type LogEntry = Awaited<ReturnType<typeof git.log>>[number];
+
+/**
+ * Construit un graphe de références à partir des commits atteignables depuis les refs
+ * locales et distantes. Les OID complets servent d'identifiants stables entre les voies.
+ */
+export async function getGitGraph(dir: string, depth = 80): Promise<GitGraphData> {
+  const [localNames, remotes] = await Promise.all([listLocalBranches(dir), git.listRemotes({ fs, dir })]);
+  const refs: { name: string; ref: string }[] = [];
+  for (const name of localNames) refs.push({ name, ref: `refs/heads/${name}` });
+  for (const remote of remotes) {
+    const names = await listRemoteBranches(dir, remote.remote).catch(() => []);
+    for (const name of names) refs.push({ name: `${remote.remote}/${name}`, ref: `refs/remotes/${remote.remote}/${name}` });
+  }
+  const histories = await Promise.all(refs.map(async (ref) => {
+    try {
+      const entries = await git.log({ fs, dir, ref: ref.ref, depth, cache: cacheFor(dir) });
+      return { name: ref.name, entries };
+    } catch {
+      return { name: ref.name, entries: [] };
+    }
+  }));
+  return buildGitGraph(histories, depth);
+}
 
 export async function getLog(dir: string, ref: string, depth: number): Promise<LogEntry[]> {
   try {

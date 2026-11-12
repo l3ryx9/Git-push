@@ -57,6 +57,8 @@ export default function BranchesScreen() {
   async function act(label: string, fn: () => Promise<unknown>) {
     try {
       await fn();
+      // La fusion affiche son propre résultat (y compris les conflits).
+      if (label !== "merge") showToast(t("g.feedback.done"), "success", t(`g.op.${label}`));
     } catch (e) {
       showAlert(t(`g.op.${label}`), describeError(e, t));
     } finally {
@@ -182,7 +184,7 @@ export default function BranchesScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppBackground />
-      <ScreenHeader
+      <ScreenHeader art="branches"
         title={t("g.nav.branches")}
         subtitle={op ? t(`g.op.${op}`) : data?.current ?? undefined}
         right={

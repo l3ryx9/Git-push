@@ -52,7 +52,7 @@ export default function DiffScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppBackground />
-      <ScreenHeader title={name} subtitle={sub} right={<IconBtn icon={full ? "minimize-2" : "maximize-2"} onPress={() => setFull((v) => !v)} />} />
+      <ScreenHeader art="changes" title={name} subtitle={sub} right={<IconBtn icon={full ? "minimize-2" : "maximize-2"} onPress={() => setFull((v) => !v)} />} />
       {error ? (
         <Text style={{ color: colors.destructive, padding: 20 }}>{error}</Text>
       ) : binary ? (

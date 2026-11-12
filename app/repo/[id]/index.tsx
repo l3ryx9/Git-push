@@ -6,6 +6,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppBackground } from "@/components/AppBackground";
+import { MatrixPushProgress } from "@/components/MatrixPushProgress";
 import {
   Btn,
   Card,
@@ -99,7 +100,7 @@ export default function RepoScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <AppBackground />
-        <ScreenHeader title={t("g.repo.title")} />
+        <ScreenHeader art="repos" title={t("g.repo.title")} />
         <Text style={{ color: colors.mutedForeground, padding: 20 }}>{t("g.err.containerNotFound")}</Text>
       </View>
     );
@@ -147,7 +148,10 @@ export default function RepoScreen() {
       if (sum.pulled === "conflict") afterMerge({ kind: "conflict", merge: repos.get(id)?.merge ?? ({ conflicts: sum.conflicts } as any) });
       else showToast(describeSync(sum), "success", t("g.op.sync"));
     });
-  const onFetch = () => act("fetch", () => repos.run(id, "fetch", (ctx) => engine.fetchRemote(ctx)));
+  const onFetch = () =>
+    act("fetch", () => repos.run(id, "fetch", (ctx) => engine.fetchRemote(ctx)), () =>
+      showToast(t("g.feedback.done"), "success", t("g.op.fetch"))
+    );
   const onPull = () => act("pull", () => repos.withBusy(id, "pull", (onProgress) => pullContainer(id, onProgress)), afterMerge);
   const onPush = () =>
     act(
@@ -190,7 +194,10 @@ export default function RepoScreen() {
     void act(
       "commit",
       () => repos.run(id, "commit", (ctx) => engine.commitStaged(ctx, msg)),
-      () => setMessage("")
+      () => {
+        setMessage("");
+        showToast(t("g.feedback.done"), "success", t("g.op.commit"));
+      }
     );
   }
 
@@ -199,11 +206,12 @@ export default function RepoScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppBackground />
-      <ScreenHeader
+      <ScreenHeader art="repos"
         title={container.name}
         subtitle={`${hostOf(container.url)} · ${container.remote}`}
         right={
           <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <IconBtn icon="git-merge" label={t("g.graph.title")} onPress={() => go("graph")} />
             <FavoriteButton active={!!container.favorite} name={container.name} onPress={() => void toggleFavorite(container)} />
             <IconBtn icon="settings" label={t("g.nav.settings")} onPress={() => go("settings")} />
           </View>
@@ -308,6 +316,9 @@ export default function RepoScreen() {
             <Btn small label={t("g.op.pull")} icon="arrow-down-circle" onPress={onPull} disabled={!!op || !!container.merge} style={{ flex: 1 }} />
             <Btn small label={t("g.op.push")} icon="arrow-up-circle" onPress={onPush} disabled={!!op || !!container.merge} style={{ flex: 1 }} />
           </View>
+        ) : null}
+        {op === "push" ? (
+          <MatrixPushProgress progress={repos.progress[id]} label={t("g.op.push")} />
         ) : null}
         <Text style={s.lastSync}>{syncSummaryText(container, t)}</Text>
         {container.lastSync && !container.lastSync.ok && container.lastSync.error && !container.merge ? (

@@ -99,7 +99,7 @@ export default function ForgeItemScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <AppBackground />
-      <ScreenHeader
+      <ScreenHeader art="forge"
         title={`#${n}`}
         subtitle={ref.project}
         right={item ? <IconBtn icon="external-link" onPress={() => WebBrowser.openBrowserAsync(item.url).catch(() => undefined)} /> : null}

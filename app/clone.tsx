@@ -13,6 +13,7 @@ import { useI18n } from "@/context/LanguageContext";
 import { useRepos } from "@/context/ReposContext";
 import { useColors } from "@/hooks/useColors";
 import { showAlert } from "@/utils/dialogs";
+import { showToast } from "@/utils/toast";
 import type { Progress } from "@/utils/git/engine";
 import { repoNameFromUrl, type AuthMode } from "@/utils/git/store";
 
@@ -83,6 +84,7 @@ export default function CloneScreen() {
         setProgress
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+      showToast(t("g.feedback.done"), "success", t("g.clone.title"));
       router.replace({ pathname: "/repo/[id]", params: { id: c.id } } as any);
     } catch (e) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
@@ -98,7 +100,7 @@ export default function CloneScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <AppBackground />
-      <ScreenHeader title={t("g.clone.title")} />
+      <ScreenHeader art="clone" title={t("g.clone.title")} />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled">
         <View style={{ marginTop: -10, marginBottom: 16 }}>
           <HelpTip title={t("g.help.clone.title")} body={t("g.help.clone.body")} />

@@ -61,7 +61,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write # nécessaire pour créer la Release
+  contents: read
 
 env:
   BUILD_TYPE: ${{ inputs.build_type || 'release' }}
@@ -71,11 +71,14 @@ env:
   CI: "1"
   EXPO_NO_TELEMETRY: "1"
   EXPO_NO_GIT_STATUS: "1"
+  PUBLISH: ${{ inputs.publish || 'false' }}
 
 jobs:
   build:
     name: Compiler l'APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 60
 
     steps:
@@ -109,6 +112,9 @@ jobs:
 
       - name: Tests unitaires
         run: npm test
+
+      - name: Vérification TypeScript
+        run: npm run typecheck
 
       - name: Retirer les réglages liés à un compte Expo (owner, EAS, mises à jour OTA)
         run: |
@@ -152,18 +158,29 @@ jobs:
       - name: Accepter les licences du SDK Android
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
 
-      - name: Signature (keystore optionnel)
+      - name: Signature (obligatoire si publication)
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          set -euo pipefail
+          if [ "$PUBLISH" = "true" ] && [ -z "$KS_B64" ]; then
+            echo "::error::Publication refusée : configure ANDROID_KEYSTORE_BASE64 et les trois secrets de signature."
+            exit 1
+          fi
           if [ -n "$KS_B64" ]; then
-            echo "$KS_B64" | base64 -d > android/app/release.keystore
+            if [ -z "$ANDROID_STORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+              echo "::error::Secrets de signature incomplets."
+              exit 1
+            fi
+            printf '%s' "$KS_B64" | base64 --decode > android/app/release.keystore
+            test -s android/app/release.keystore
+            chmod 600 android/app/release.keystore
             echo "Keystore release installé."
           else
-            echo "Pas de keystore : l'APK sera signé avec la clé de debug (installable ; à remplacer pour le Play Store)."
+            echo "Pas de keystore : build non publié signé en debug."
           fi
           node ci/sign-android.js
 
@@ -210,33 +227,6 @@ jobs:
           retention-days: 14
           compression-level: 0
 
-      - name: Empreinte SHA-256 de l'APK
-        if: inputs.publish
-        run: |
-          cd dist
-          sha256sum ./*.apk | sed 's# \./# #' > SHA256SUMS.txt
-          cat SHA256SUMS.txt
-
-      - name: Publier dans les Releases
-        if: inputs.publish
-        uses: softprops/action-gh-release@v2
-        with:
-          # Avec une version (v1.2.3) : release « propre » avec notes générées. Sinon : tag build-N.
-          tag_name: ${{ inputs.tag || format('build-{0}', github.run_number) }}
-          target_commitish: ${{ github.sha }}
-          # Entre guillemets : sans eux, le « # » ci-dessous serait pris pour un commentaire YAML et couperait l'expression.
-          name: "Git-Push ${{ inputs.tag || format('{0} #{1}', env.BUILD_TYPE, github.run_number) }}"
-          generate_release_notes: ${{ inputs.tag != '' }}
-          prerelease: ${{ inputs.prerelease || contains(inputs.tag, '-') }}
-          body: |
-            APK ${{ env.BUILD_TYPE }} · architecture ${{ env.ABI }} · commit ${{ github.sha }}
-
-            **Installer** : télécharge l'APK ci-dessous, ouvre-le et autorise l'installation depuis cette source si Android le demande.
-            **Vérifier** : l'empreinte SHA-256 est dans `SHA256SUMS.txt`.
-          files: |
-            ${{ steps.apk.outputs.path }}
-            dist/SHA256SUMS.txt
-
       - name: Résumé des erreurs
         if: failure()
         run: |
@@ -264,3 +254,41 @@ jobs:
           path: ci/logs
           if-no-files-found: ignore
           retention-days: 7
+
+  publish:
+    name: Publier la release
+    needs: build
+    if: inputs.publish == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Télécharger l'APK compilé
+        uses: actions/download-artifact@v7
+        with:
+          name: Git-Push-${{ env.BUILD_TYPE }}-${{ github.run_number }}
+          path: dist
+
+      - name: Calculer l'empreinte SHA-256
+        run: |
+          cd dist
+          sha256sum ./*.apk | sed 's# \\./# #' > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Publier dans les Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || format('build-{0}', github.run_number) }}
+          target_commitish: ${{ github.sha }}
+          name: "Git-Push ${{ inputs.tag || format('{0} #{1}', env.BUILD_TYPE, github.run_number) }}"
+          generate_release_notes: ${{ inputs.tag != '' }}
+          prerelease: ${{ inputs.prerelease || contains(inputs.tag, '-') }}
+          body: |
+            APK ${{ env.BUILD_TYPE }} · architecture ${{ env.ABI }} · commit ${{ github.sha }}
+
+            **Installer** : télécharge l'APK ci-dessous, ouvre-le et autorise l'installation depuis cette source si Android le demande.
+            **Vérifier** : l'empreinte SHA-256 est dans `SHA256SUMS.txt`.
+          files: |
+            dist/*.apk
+            dist/SHA256SUMS.txt

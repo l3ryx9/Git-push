@@ -66,7 +66,7 @@ export default function CommitsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppBackground />
-      <ScreenHeader title={t("g.nav.commits")} subtitle={ref || c.branch} />
+      <ScreenHeader art="history" title={t("g.nav.commits")} subtitle={ref || c.branch} />
       <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
         <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, borderRadius: 12, paddingHorizontal: 12, minHeight: 44 }}>
           <Text style={{ color: colors.mutedForeground, fontSize: 16, marginRight: 8 }}>⌕</Text>

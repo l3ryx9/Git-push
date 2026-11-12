@@ -25,7 +25,15 @@ export type IllustrationKind =
   | "changes"
   | "conflicts"
   | "empty"
-  | "success";
+  | "success"
+  | "compare"
+  | "commit"
+  | "remote"
+  | "settings"
+  | "account"
+  | "ai"
+  | "forge"
+  | "editor";
 
 // Teintes propres aux illustrations (en plus des couleurs du thème).
 const PINK = "#f472b6";
@@ -52,6 +60,21 @@ export function illustrationColor(kind: IllustrationKind, c: ReturnType<typeof u
       return c.destructive;
     case "success":
       return c.success;
+    case "compare":
+    case "remote":
+      return c.cyan;
+    case "commit":
+      return c.amber;
+    case "settings":
+      return c.blue;
+    case "account":
+      return c.violet;
+    case "ai":
+      return "#9d8cff";
+    case "forge":
+      return PINK;
+    case "editor":
+      return ORANGE;
     default:
       return c.accent;
   }
@@ -233,6 +256,93 @@ function Scene({ kind, color, ink }: { kind: IllustrationKind; color: string; in
           </View>
         </>
       );
+    case "compare":
+      return (
+        <>
+          <Seg x1={14} y1={18} x2={50} y2={46} bg={mid} t={4} />
+          <Seg x1={14} y1={46} x2={50} y2={18} bg={color} t={4} />
+          <Dot cx={14} cy={18} d={13} bg={ink} border={mid} bw={3} />
+          <Dot cx={14} cy={46} d={13} bg={ink} border={color} bw={3} />
+          <Dot cx={50} cy={18} d={13} bg={ink} border={color} bw={3} />
+          <Dot cx={50} cy={46} d={13} bg={ink} border={mid} bw={3} />
+          <Dot cx={32} cy={32} d={12} bg={color} />
+        </>
+      );
+    case "commit":
+      return (
+        <>
+          <Box x={12} y={9} w={40} h={48} r={8} bg={soft} />
+          <Box x={19} y={18} w={26} h={4} r={2} bg={color} />
+          <Box x={19} y={28} w={20} h={4} r={2} bg={mid} />
+          <Box x={19} y={38} w={24} h={4} r={2} bg={mid} />
+          <Badge cx={49} cy={48} icon="check" color={color} ink={ink} />
+        </>
+      );
+    case "remote":
+      return (
+        <>
+          <Dot cx={32} cy={32} d={48} bg={soft} />
+          <Dot cx={32} cy={32} d={15} bg={color} />
+          <Dot cx={12} cy={16} d={10} bg={ink} border={color} bw={3} />
+          <Dot cx={52} cy={15} d={10} bg={ink} border={color} bw={3} />
+          <Dot cx={13} cy={49} d={10} bg={ink} border={color} bw={3} />
+          <Dot cx={51} cy={49} d={10} bg={ink} border={color} bw={3} />
+          <Seg x1={16} y1={19} x2={27} y2={27} bg={mid} />
+          <Seg x1={48} y1={19} x2={37} y2={27} bg={mid} />
+          <Seg x1={17} y1={46} x2={27} y2={37} bg={mid} />
+          <Seg x1={47} y1={46} x2={37} y2={37} bg={mid} />
+        </>
+      );
+    case "settings":
+      return (
+        <>
+          <Dot cx={32} cy={32} d={54} bg={soft} />
+          <View style={{ position: "absolute", left: 10, top: 10, width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+            <Feather name="settings" size={39} color={color} />
+          </View>
+          <Dot cx={32} cy={32} d={13} bg={ink} />
+        </>
+      );
+    case "account":
+      return (
+        <>
+          <Dot cx={32} cy={20} d={22} bg={color} />
+          <Box x={12} y={34} w={40} h={22} r={12} bg={soft} />
+          <Dot cx={32} cy={20} d={10} bg={ink} />
+        </>
+      );
+    case "ai":
+      return (
+        <>
+          <Dot cx={32} cy={32} d={54} bg={soft} />
+          <View style={{ position: "absolute", left: 11, top: 11, width: 42, height: 42, alignItems: "center", justifyContent: "center" }}>
+            <Feather name="cpu" size={36} color={color} />
+          </View>
+          <Dot cx={51} cy={13} d={8} bg={color} />
+        </>
+      );
+    case "forge":
+      return (
+        <>
+          <Box x={9} y={13} w={46} h={40} r={10} bg={soft} />
+          <Seg x1={16} y1={22} x2={48} y2={44} bg={color} t={4} />
+          <Seg x1={16} y1={44} x2={48} y2={22} bg={mid} t={4} />
+          <Dot cx={16} cy={22} d={9} bg={color} />
+          <Dot cx={48} cy={22} d={9} bg={color} />
+          <Dot cx={16} cy={44} d={9} bg={color} />
+          <Dot cx={48} cy={44} d={9} bg={color} />
+        </>
+      );
+    case "editor":
+      return (
+        <>
+          <Box x={10} y={8} w={44} h={48} r={8} bg={soft} />
+          <Box x={17} y={17} w={28} h={4} r={2} bg={color} />
+          <Box x={17} y={27} w={21} h={4} r={2} bg={mid} />
+          <Box x={17} y={37} w={25} h={4} r={2} bg={mid} />
+          <Badge cx={48} cy={48} icon="edit-3" color={color} ink={ink} />
+        </>
+      );
     default:
       // « empty » : dossier vide en pointillés
       return (
@@ -269,14 +379,15 @@ export function Illustration({ kind, size = 64 }: { kind: IllustrationKind; size
 }
 
 /**
- * Bandeau d'accueil : le graphe de commits (tronc + deux branches + fusion) qui est
- * la signature visuelle de l'app, dessiné ici en grand.
+ * Logo réseau planétaire pour le bandeau d'accueil : un globe relié à plusieurs
+ * nœuds, dessiné en vues natives pour rester net, léger et disponible hors ligne.
  */
 export function HeroGraph({ width = 132, height = 96 }: { width?: number; height?: number }) {
   const colors = useColors();
   const sx = width / 132;
   const sy = height / 96;
-  const lane = (x: number) => x;
+  const line = withAlpha(colors.cyan, 0.72);
+  const glow = withAlpha(colors.accent, 0.14);
   return (
     <View
       accessibilityElementsHidden
@@ -284,23 +395,22 @@ export function HeroGraph({ width = 132, height = 96 }: { width?: number; height
       style={{ width, height, overflow: "hidden" }}
     >
       <View style={{ width: 132, height: 96, transform: [{ scaleX: sx }, { scaleY: sy }], transformOrigin: "0% 0%" }}>
-        {/* trois voies */}
-        <Box x={lane(24)} y={8} w={4} h={80} r={2} bg={withAlpha(colors.accent, 0.9)} />
-        <Seg x1={26} y1={30} x2={64} y2={48} bg={withAlpha(colors.violet, 0.8)} />
-        <Box x={62} y={48} w={4} h={28} r={2} bg={withAlpha(colors.violet, 0.8)} />
-        <Seg x1={64} y1={76} x2={26} y2={86} bg={withAlpha(colors.violet, 0.8)} />
-        <Seg x1={26} y1={18} x2={104} y2={30} bg={withAlpha(colors.cyan, 0.7)} />
-        <Box x={102} y={30} w={4} h={40} r={2} bg={withAlpha(colors.cyan, 0.7)} />
-        <Seg x1={104} y1={70} x2={26} y2={86} bg={withAlpha(colors.cyan, 0.7)} />
-        {/* commits */}
-        <Dot cx={26} cy={10} d={14} bg={colors.cardSolid} border={colors.accent} bw={3.5} />
-        <Dot cx={26} cy={30} d={12} bg={colors.accent} />
-        <Dot cx={64} cy={50} d={12} bg={colors.cardSolid} border={colors.violet} bw={3} />
-        <Dot cx={64} cy={74} d={12} bg={colors.violet} />
-        <Dot cx={104} cy={32} d={12} bg={colors.cardSolid} border={colors.cyan} bw={3} />
-        <Dot cx={104} cy={60} d={12} bg={colors.cyan} />
-        <Dot cx={26} cy={86} d={16} bg={colors.accent} />
-        <Dot cx={26} cy={86} d={7} bg={colors.cardSolid} />
+        <Dot cx={66} cy={48} d={88} bg={glow} />
+        <Dot cx={66} cy={48} d={66} bg={colors.cardSolid} border={withAlpha(colors.accent, 0.75)} bw={2.5} />
+        <Box x={51} y={17} w={30} h={62} r={30} bg="transparent" border={withAlpha(colors.cyan, 0.65)} bw={2} />
+        <Box x={34} y={39} w={64} h={18} r={20} bg="transparent" border={withAlpha(colors.accent, 0.55)} bw={2} />
+        <Box x={35} y={47} w={62} h={2} r={1} bg={withAlpha(colors.cyan, 0.5)} />
+        <Seg x1={25} y1={20} x2={43} y2={34} bg={line} t={2.5} />
+        <Seg x1={107} y1={17} x2={88} y2={34} bg={line} t={2.5} />
+        <Seg x1={112} y1={70} x2={91} y2={61} bg={line} t={2.5} />
+        <Seg x1={20} y1={72} x2={42} y2={61} bg={line} t={2.5} />
+        <Seg x1={66} y1={7} x2={66} y2={15} bg={line} t={2.5} />
+        <Dot cx={22} cy={18} d={13} bg={colors.cardSolid} border={colors.cyan} bw={3} />
+        <Dot cx={110} cy={15} d={13} bg={colors.cardSolid} border={colors.violet} bw={3} />
+        <Dot cx={116} cy={72} d={13} bg={colors.cardSolid} border={colors.accent} bw={3} />
+        <Dot cx={17} cy={74} d={13} bg={colors.cardSolid} border={colors.violet} bw={3} />
+        <Dot cx={66} cy={7} d={10} bg={colors.accent} />
+        <Dot cx={66} cy={48} d={10} bg={colors.accent} />
       </View>
     </View>
   );

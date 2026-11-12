@@ -94,7 +94,7 @@ export default function CompareBranchesScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppBackground />
-      <ScreenHeader title={t("g.compare.title")} subtitle={t("g.compare.subtitle")} />
+      <ScreenHeader art="compare" title={t("g.compare.title")} subtitle={t("g.compare.subtitle")} />
       {loading && !branches.length ? <ActivityIndicator color={colors.accent} style={{ marginTop: 32 }} /> : (
         <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: insets.bottom + 30 }}>
           <Card>

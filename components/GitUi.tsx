@@ -231,6 +231,7 @@ export function ScreenHeader({
   right,
   onBack,
   noBack,
+  art,
 }: {
   title: string;
   subtitle?: string;
@@ -238,10 +239,32 @@ export function ScreenHeader({
   onBack?: () => void;
   /** Pas de flèche retour (écran affiché dans un onglet). */
   noBack?: boolean;
+  /** Illustration propre à l'écran, purement décorative. */
+  art?: IllustrationKind;
 }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { t } = useI18n();
+  // Entrée discrète du contenu : native driver, sans décalage de mise en page.
+  const [headerEntrance] = useState(() => new Animated.Value(reduceMotion ? 1 : 0));
+  useEffect(() => {
+    if (reduceMotion) {
+      headerEntrance.setValue(1);
+      return;
+    }
+    const animation = Animated.timing(headerEntrance, {
+      toValue: 1,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [headerEntrance]);
+  const entranceStyle = {
+    opacity: headerEntrance,
+    transform: [{ translateY: headerEntrance.interpolate({ inputRange: [0, 1], outputRange: [5, 0] }) }],
+  };
   return (
     <View
       style={{
@@ -258,7 +281,7 @@ export function ScreenHeader({
       }}
     >
       {noBack ? (
-        <View style={{ width: 6 }} />
+        <View style={{ width: 4, height: 24, borderRadius: 2, backgroundColor: withAlpha(colors.accent, 0.78) }} />
       ) : (
         <PressableScale
           hitSlop={10}
@@ -271,7 +294,24 @@ export function ScreenHeader({
           <Feather name="arrow-left" size={20} color={colors.foreground} />
         </PressableScale>
       )}
-      <View style={{ flex: 1 }}>
+      {art ? (
+        <Animated.View style={entranceStyle}>
+        <View style={{
+          width: 48,
+          height: 48,
+          borderRadius: 16,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: withAlpha(illustrationColor(art, colors), 0.11),
+          borderWidth: 1,
+          borderColor: withAlpha(illustrationColor(art, colors), 0.22),
+          overflow: "hidden",
+        }}>
+          <Illustration kind={art} size={42} />
+        </View>
+        </Animated.View>
+      ) : null}
+      <Animated.View style={[{ flex: 1 }, entranceStyle]}>
         <Text numberOfLines={1} accessibilityRole="header" style={{ color: colors.foreground, fontSize: 19, fontFamily: "Inter_700Bold", letterSpacing: -0.3 }}>
           {title}
         </Text>
@@ -280,7 +320,7 @@ export function ScreenHeader({
             {subtitle}
           </Text>
         ) : null}
-      </View>
+      </Animated.View>
       {right}
     </View>
   );
@@ -333,6 +373,8 @@ export function Card({ children, style }: { children: React.ReactNode; style?: S
         style,
       ]}
     >
+      <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, backgroundColor: withAlpha(colors.cyan, 0.28) }} />
+      <View pointerEvents="none" style={{ position: "absolute", top: 10, right: 12, width: 5, height: 5, borderRadius: 3, backgroundColor: withAlpha(colors.accent, 0.28) }} />
       {children}
     </View>
   );
@@ -342,6 +384,7 @@ export function SectionTitle({ children, right }: { children: React.ReactNode; r
   const colors = useColors();
   return (
     <View style={{ flexDirection: "row", alignItems: "center", marginTop: 22, marginBottom: 8, paddingHorizontal: 4 }}>
+      <View style={{ width: 3, height: 14, borderRadius: 2, marginRight: 8, backgroundColor: withAlpha(colors.cyan, 0.82) }} />
       <Text
         accessibilityRole="header"
         style={{

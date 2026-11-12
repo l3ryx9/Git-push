@@ -6,6 +6,7 @@ import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, Tex
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppBackground } from "@/components/AppBackground";
+import { Illustration, illustrationColor } from "@/components/Illustration";
 import { FavoriteButton, useToggleFavorite } from "@/components/FavoriteButton";
 import { Badge, Btn, describeError, Empty, PressableScale, SkeletonRow, syncSummaryText } from "@/components/GitUi";
 import { stateColor } from "@/components/HomeUi";
@@ -94,7 +95,12 @@ export default function ReposScreen() {
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <AppBackground />
       <View style={[s.header, { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) }]}>
-        <Text style={s.title}>{t("g.repos.title")}</Text>
+        <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View style={{ width: 46, height: 46, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: withAlpha(illustrationColor("repos", colors), 0.12), borderWidth: 1, borderColor: withAlpha(illustrationColor("repos", colors), 0.22) }}>
+            <Illustration kind="repos" size={40} />
+          </View>
+          <Text style={s.title}>{t("g.repos.title")}</Text>
+        </View>
         {containers.length > 1 && (
           <Pressable
             accessibilityRole="button"

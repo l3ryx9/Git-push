@@ -67,7 +67,7 @@ export default function RunScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppBackground />
-      <ScreenHeader
+      <ScreenHeader art="forge"
         title={run ? `${run.workflow} #${run.number}` : "GitHub Actions"}
         subtitle={ref.project}
         right={run ? <IconBtn icon="external-link" onPress={() => WebBrowser.openBrowserAsync(run.url).catch(() => undefined)} /> : null}

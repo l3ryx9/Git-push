@@ -122,3 +122,82 @@ Limite connue : la recherche porte uniquement sur les commits déjà chargés en
 ### Validation avant diffusion
 
 Installer les dépendances sur Node 22.6+, lancer `npm test` et `npm run typecheck`, puis exécuter le workflow GitHub Actions de build APK. Tester ensuite sur un appareil Android : création d'un dépôt local, ajout/modification/suppression de fichiers, commit, push, pull, mode hors ligne, reprise réseau et résolution d'un conflit réel.
+
+
+## Passe visuelle — Phase 11
+
+- Ajout d'un système d'illustrations vectorielles dédiées aux écrans, réutilisé dans `ScreenHeader`.
+- Les pages Git principales, les écrans de compte/synchronisation, les écrans Forge et les réglages disposent maintenant d'un visuel contextuel.
+- Les onglets Dépôts, Fichiers et Paramètres ont un titre illustré ; Accueil et IA conservent leurs identités propres.
+- Les illustrations sont purement décoratives, locales et sans dépendance supplémentaire.
+- Tests automatisés : 42 réussis, 0 échec. TypeScript/build Android non validés dans cet environnement (dépendances Expo absentes).
+
+## Phase 12 — Mouvement et accessibilité
+
+- En-têtes : fondu et translation verticale très courte à l'affichage, pilotés nativement.
+- Mouvement désactivé si la préférence système de réduction des animations est active.
+- Aucun minuteur JavaScript ni animation continue supplémentaire ; pas de dépendance ajoutée.
+- Les interactions pressées et les squelettes conservent leurs animations existantes.
+
+## Phase 13 — Navigation et feedback
+
+- Navigation : glissement horizontal pour la consultation, transition « fade_from_bottom » sur Cloner / Nouveau dépôt / Synchroniser, transitions d'onglets « shift » et fondu sur la connexion.
+- Feedback : les opérations Git auparavant silencieuses affichent désormais un toast de réussite après confirmation réelle de l'opération.
+- Les erreurs continuent d'afficher leur diagnostic ; les fusions conservent leur résultat détaillé et la détection des conflits.
+- Le ToastHost global est monté au niveau racine, ce qui permet d'afficher le retour même lorsque l'opération change de route.
+
+## Phase 14 — Tableau de bord Git
+
+- Nouvel écran `app/repo/[id]/graph.tsx`, accessible depuis le bouton Git de l'en-tête du dépôt.
+- Les données proviennent du moteur Git local : branches, refs distantes, `aheadBehind` et journal de HEAD.
+- Le graphe charge jusqu'à 80 commits par référence locale/distante et affiche jusqu'à 80 commits dédupliqués ; les commits de fusion sont repérés par leurs parents multiples.
+- Les branches locales ouvrent leur propre historique ; les commits ouvrent leur écran de détail.
+- Les statistiques de divergence reflètent le résultat du calcul `aheadBehind` existant (limité à 150 commits par côté dans le moteur).
+- Les tests automatisés passent ; le typecheck global n'est pas validable dans cet environnement sans les dépendances Expo/React Native installées.
+
+## Phase 15 — Graphe Git animé
+
+- `utils/git/graphPure.ts` construit un DAG visuel depuis les historiques des branches locales et des références distantes.
+- Les commits sont dédupliqués par OID ; l'ordre topologique garde les parents après les enfants connus même si les horodatages d'auteur sont incohérents.
+- Chaque commit conserve ses OID parents, ses voies, ses refs de tête et son indicateur de fusion.
+- `components/GitCommitGraph.tsx` dessine les liens entre les vrais commits parents, avec des voies colorées, des marqueurs de fusion et les étiquettes de branches.
+- Les liens se révèlent progressivement et les nœuds apparaissent avec un ressort natif ; le réglage Réduire les animations désactive ces mouvements.
+- Chaque commit reste accessible au toucher et ouvre son écran de détail.
+- Tests purs du graphe : déduplication/refs, ordre topologique, fusion multi-parents et limite de profondeur.
+
+## Phase 16 — Progression Push Matrix
+
+- `engine.pushRemote` relaie le callback `ctx.onProgress` vers `git.push` d'isomorphic-git.
+- L'écran du dépôt affiche `MatrixPushProgress` pendant l'opération Push.
+- Le pourcentage est calculé uniquement à partir des valeurs `loaded` et `total` fournies par Git ; avant disponibilité du total, une animation indéterminée est affichée.
+- L'interface affiche la phase de transfert et les objets traités, avec une animation néon Matrix indépendante du calcul de progression.
+
+## Phase 17 — Corrections de sécurité et de fiabilité (12 novembre 2026)
+
+### Corrections apportées
+
+1. **Serveur statique — origine de la page d'accueil** : le serveur n'utilise plus `X-Forwarded-Host` fourni par le client. L'en-tête `Host` est validé et canonicalisé par `URL`; le protocole transféré est limité à `http` / `https`. Le nom de l'application est échappé avant insertion dans le HTML.
+2. **Serveur statique — fichiers servis** : résolution des chemins après décodage URI, refus des traversées hors racine, contrôle du chemin réel pour bloquer les liens symboliques sortant de `static-build`, refus des méthodes autres que GET/HEAD, streaming des fichiers au lieu de les charger intégralement en mémoire et ajout d'en-têtes de sécurité.
+3. **Serveur HTTP** : les URL malformées et les ports invalides sont rejetés proprement ; le préfixe `BASE_PATH` est reconnu uniquement sur une frontière de segment.
+4. **CI — dépendances catalog** : `ci/prepare.js` échoue désormais si une entrée `catalog:` n'a pas de version approuvée ; il ne remplace plus silencieusement une dépendance inconnue par `latest`.
+5. **CI — signature Android** : une release publiée exige un keystore et les trois secrets de signature. Une configuration incomplète fait échouer le pipeline au lieu de publier un APK release signé avec la clé de debug.
+6. **CI — permissions** : les jobs de compilation et de validation utilisent `contents: read`; seul le job de publication reçoit `contents: write`. Le job de validation de version du workflow de release est également en lecture seule.
+7. **CI — qualité** : `npm run typecheck` est ajouté au pipeline, après les tests unitaires et avant le build Android.
+8. **Tests** : ajout de tests sur l'origine HTTP, l'échappement HTML, les chemins encodés, le refus des catalogues inconnus et les secrets de signature incomplets.
+
+### Résultats vérifiés dans cet environnement
+
+- `node --experimental-strip-types --test tests/*.test.mjs` : **52 tests réussis, 0 échec**.
+- Syntaxe Node vérifiée sur le serveur et les scripts CI modifiés.
+- Les deux workflows GitHub Actions sont syntaxiquement lisibles en YAML.
+- Les contrôles de chemins, de Host, de méthodes HTTP, de liens symboliques et de signature sont couverts par des tests automatisés.
+
+### Points qui restent à valider avant publication
+
+- **TypeScript et build APK** : non exécutés localement, car `node_modules`, Android SDK et ADB ne sont pas présents dans cet environnement. Le typecheck est maintenant bloquant dans le workflow GitHub Actions.
+- **Dépendances** : aucun `package-lock.json` n'est fourni dans l'archive ; une installation propre et un audit npm des dépendances transitives restent nécessaires avant publication.
+- **Git distant** : tests d'intégration push/pull/fetch et callback de progression avec GitHub, GitLab et Gitea/Forgejo non exécutés ici.
+- **Android réel** : permissions, accessibilité, tuile, widget, sauvegarde/restauration, migration et tâche de fond à tester sur appareil.
+- **Secrets de publication** : le nouveau garde-fou a été testé avec des secrets manquants ; une release signée doit être vérifiée avec le vrai keystore du mainteneur dans GitHub Actions.
+
+Aucune vulnérabilité CVE n'est déclarée corrigée : le rapport initial ne fournissait pas d'identifiant CVE ni de constat d'audit externe reproductible. Cette passe corrige des risques identifiés lors de la revue du code et documente les validations qui nécessitent un environnement réel.

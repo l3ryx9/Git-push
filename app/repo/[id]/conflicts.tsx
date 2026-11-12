@@ -27,7 +27,7 @@ export default function ConflictsScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <AppBackground />
-        <ScreenHeader title={t("g.conflicts.title")} />
+        <ScreenHeader art="success" title={t("g.conflicts.title")} />
         <Empty icon="check-circle" art="success" text={t("g.conflicts.none")} hint={t("g.help.conflicts.body")} />
       </View>
     );
@@ -93,7 +93,7 @@ export default function ConflictsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppBackground />
-      <ScreenHeader title={t("g.conflicts.title")} subtitle={m.message} />
+      <ScreenHeader art="conflicts" title={t("g.conflicts.title")} subtitle={m.message} />
       <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: insets.bottom + 30 }}>
         <HelpTip title={t("g.help.conflicts.title")} body={t("g.help.conflicts.body")} />
         <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 17, marginBottom: 12 }}>

@@ -75,7 +75,7 @@ export default function NewRepoScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <AppBackground />
-      <ScreenHeader title={t("newRepo.title")} />
+      <ScreenHeader art="newRepo" title={t("newRepo.title")} />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled">
         <View style={{ marginTop: -10, marginBottom: 16 }}>
           <HelpTip title={t("g.help.newRepo.title")} body={t("g.help.newRepo.body")} />

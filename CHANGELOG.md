@@ -1,7 +1,7 @@
 ## Phase 9 — Refonte visuelle et accueil illustré
 
-- Accueil repensé : message de bienvenue, visuel « graphe de commits », accès au profil et aux paramètres.
-- Section « Mes raccourcis » : 8 grandes cartes illustrées, toutes branchées sur de vraies pages — Mes dépôts, Cloner, Nouveau dépôt, Synchroniser (synchro Git réelle avec progression), Branches, Historique, Modifications, Conflits. Aucun dépôt cloné : la carte guide vers le clonage ; plusieurs dépôts : un sélecteur demande lequel ouvrir.
+- Accueil repensé : message de bienvenue, logo illustré de réseau planétaire placé à droite du texte, accès au profil et aux paramètres.
+- Section « Mes raccourcis » : 8 grandes cartes illustrées de dimensions strictement identiques (190 px de haut), toutes branchées sur de vraies pages — Mes dépôts, Cloner, Nouveau dépôt, Synchroniser (synchro Git réelle avec progression), Branches, Historique, Modifications, Conflits. Aucun dépôt cloné : la carte guide vers le clonage ; plusieurs dépôts : un sélecteur demande lequel ouvrir.
 - Section « Activité récente » : dépôts consultés, dernières synchronisations et derniers commits du dépôt GitHub actif (données réelles uniquement).
 - Section « Dépôts favoris » : étoile sur la liste et le détail d'un dépôt ; carte avec branche active, état de synchronisation et accès direct. Deux nouveaux champs optionnels sur les dépôts (`favorite`, `lastOpenedAt`) : les données existantes restent compatibles.
 - Fonctions GitHub historiques de l'accueil conservées (dépôt actif, envoi de fichiers, parcourir, tickets, pull requests, Actions, synchro auto) dans la section « Compte GitHub ».
@@ -141,3 +141,64 @@ Vérification : tests automatisés existants exécutés après les modifications
 - Vérification des marqueurs de conflit et de la détection des fichiers binaires.
 - Suite de tests locale : 32 tests réussis, 0 échec (`node --experimental-strip-types --test tests/*.test.mjs`).
 - Limite de validation : les tests d'intégration avec un serveur distant, la compilation TypeScript et le build APK nécessitent les dépendances du projet et un SDK Android ; ils ne sont pas revendiqués comme exécutés ici.
+\n## Phase 10 — Graphisme discret et cohérent sur toutes les pages\n\n- Fond commun enrichi de halos circulaires et de petits nœuds de connexion, dans les couleurs du thème, sans intercepter les interactions.\n- Cartes partagées habillées d'un filet supérieur et d'un détail lumineux très subtil.\n- Titres de section renforcés par un repère vertical cyan ; en-têtes d'onglets dotés d'un accent de marque discret.\n- Les écrans qui utilisent `AppBackground` bénéficient automatiquement de cette identité graphique (écrans principaux, dépôts, réglages, IA, Forge et écrans secondaires).\n- Aucun ajout de dépendance, d'image distante ou de donnée fictive.\n- Vérification : `npm test` — 42 tests réussis, 0 échec. Compilation TypeScript et build Android non exécutés.\n
+## Phase 11 — Illustrations dédiées aux écrans
+
+- Extension du système d'illustrations vectorielles locales avec des scènes dédiées : comparaison, commit, remotes, réglages, compte, IA, Forge et éditeur.
+- `ScreenHeader` accepte maintenant une illustration propre à l'écran, dans un cadre compact et discret.
+- Ajout d'illustrations adaptées aux écrans de branches, historique, conflits, différences, fichiers, comparaison, remotes, paramètres, éditeur, détails de commit, clonage, création de dépôt, comptes, synchronisation et Forge.
+- Les onglets Dépôts, Fichiers et Paramètres reçoivent eux aussi une illustration de titre ; l'accueil conserve son globe réseau et l'assistant IA sa scène dédiée.
+- Illustrations dessinées avec les vues React Native et Feather : aucun asset distant, aucun appel réseau, aucune dépendance supplémentaire.
+- Le contenu et les actions des écrans restent inchangés ; les illustrations sont décoratives et masquées aux lecteurs d'écran.
+- Vérification : `npm test` — 42 tests réussis, 0 échec. TypeScript et build Android non vérifiés faute des dépendances Expo installées dans cet environnement.
+
+## Phase 12 — Transitions et micro-animations
+
+- Ajout d'une entrée douce (fondu + léger déplacement vertical de 5 px) sur l'illustration et le titre des en-têtes d'écran.
+- Animation exécutée avec `Animated` et le pilote natif : elle ne modifie pas la mise en page et reste légère.
+- Respect de la préférence système « Réduire les animations » : l'en-tête apparaît immédiatement lorsque cette option est active.
+- Conservation des interactions tactiles à ressort et des squelettes animés déjà présents ; aucune dépendance ajoutée.
+
+## Phase 13 — Navigation et retours des opérations Git
+
+- Transitions de navigation affinées : glissement natif pour la consultation, animation verticale douce pour Cloner / Nouveau dépôt / Synchroniser, animation « shift » entre onglets et fondu à l'ouverture de la connexion.
+- Retours de réussite ajoutés aux actions qui restaient silencieuses : fetch, commit, changement/création/renommage/suppression de branche, opérations sur les remotes et clonage.
+- Les notifications réutilisent le ToastHost global : elles restent visibles pendant le changement d'écran et conservent les retours haptiques/accessibilité existants.
+- Les résultats spécifiques (push, sync, pull/fusion et conflits) gardent leurs messages détaillés, sans notification de réussite en double.
+- Messages de confirmation ajoutés en français et en anglais ; les autres langues utilisent le fallback existant.
+
+## Phase 14 — Tableau de bord Git
+
+- Ajout d'un écran Vue d'ensemble Git accessible depuis l'en-tête du dépôt.
+- Indicateurs : branches locales, branches distantes et commits récents.
+- État de synchronisation : dernière tentative, succès/échec, reprise en attente et avance/retard par rapport à l'upstream.
+- Liste des branches locales avec leur SHA de tête et accès direct à leur historique.
+- Liste des branches distantes par remote avec leurs SHAs.
+- Chronologie visuelle des 30 derniers commits de HEAD ; les commits de fusion sont distingués et chaque commit ouvre sa fiche détaillée.
+- Libellés français et anglais.
+
+## Phase 15 — Graphe Git multi-branches animé
+
+- Remplacement de la simple chronologie par un graphe de commits multi-branches fondé sur les vrais parents Git et les refs locales/distantes.
+- Construction d'un ordre topologique des commits, déduplication des commits communs et voies distinctes pour visualiser les bifurcations et fusions.
+- Étiquettes de branches directement sur les commits de tête ; couleurs différenciées par voie et marqueur dédié aux commits de fusion.
+- Connecteurs dessinés progressivement et nœuds animés à l'apparition ; sélection d'un commit pour ouvrir sa fiche.
+- Défilement horizontal pour les graphes comportant plusieurs voies.
+- Respect du réglage système de réduction des animations.
+- Extracteur de graphe pur avec tests unitaires dédiés.
+
+## Phase 16 — Barre de push Matrix
+
+- Ajout d'une barre de progression Push au style terminal Matrix : fond noir, vert néon, caractères binaires animés, segments lumineux et balayage.
+- Connexion au callback `onProgress` natif d'isomorphic-git pour afficher la progression réelle des objets Git transmis (chargé/total lorsque disponible).
+- Mode animé indéterminé tant que Git ne fournit pas encore de total, sans inventer de pourcentage.
+- Affichage de la phase Git en cours et du nombre d'objets traités.
+
+## Phase 17 — Sécurité et fiabilité
+
+- Serveur HTTP durci : validation du Host, abandon de `X-Forwarded-Host`, échappement HTML, protection contre les liens symboliques sortant du répertoire statique, chemins URI décodés et contrôlés, méthodes GET/HEAD uniquement, streaming des fichiers et en-têtes de sécurité.
+- CI : les entrées `catalog:` inconnues font échouer la préparation au lieu de résoudre `latest`.
+- Publication Android : keystore et secrets de signature requis pour publier ; aucune release publique ne peut être signée par défaut avec la clé de debug.
+- Permissions GitHub Actions réduites : lecture seule pour le build et la validation, écriture uniquement dans le job de publication.
+- Ajout du typecheck au pipeline CI et de tests de sécurité / intégration HTTP.
+- Validation locale : 52 tests réussis. Typecheck et build Android restent à exécuter dans l'environnement complet.

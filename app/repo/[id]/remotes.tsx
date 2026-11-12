@@ -43,7 +43,7 @@ export default function RemotesScreen() {
   async function act(label: string, fn: () => Promise<unknown>, okMsg?: string) {
     try {
       await fn();
-      if (okMsg) showToast(okMsg, "success", t(`g.op.${label}`));
+      showToast(okMsg ?? t("g.feedback.done"), "success", t(`g.op.${label}`));
     } catch (e) {
       showAlert(t(`g.op.${label}`), describeError(e, t));
     } finally {
@@ -89,7 +89,7 @@ export default function RemotesScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppBackground />
-      <ScreenHeader title={t("g.nav.remotes")} right={<IconBtn icon="plus" onPress={() => setAdding(true)} />} />
+      <ScreenHeader art="remote" title={t("g.nav.remotes")} right={<IconBtn icon="plus" onPress={() => setAdding(true)} />} />
       {!list ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 30 }} />
       ) : (

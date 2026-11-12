@@ -19,13 +19,14 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppBackground } from "@/components/AppBackground";
+import { Illustration, illustrationColor } from "@/components/Illustration";
 import { PickerModal } from "@/components/PickerModal";
 import { useGitHub } from "@/context/GitHubContext";
 import { useI18n } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
 import { createBatchPusher, SPLIT_ABOVE_B64, type BatchSummary } from "@/utils/batchPush";
 import { showAlert, showConfirm } from "@/utils/dialogs";
-import { C } from "@/constants/colors";
+import { C, withAlpha } from "@/constants/colors";
 
 interface SelectedFile {
   name: string;
@@ -446,7 +447,10 @@ export default function FilesScreen() {
     >
       <AppBackground />
       {/* Header */}
-      <View style={[s.header, { paddingTop: insets.top + webTop }]}>
+      <View style={[s.header, { paddingTop: insets.top + webTop, flexDirection: "row", alignItems: "center", gap: 10 }]}>
+        <View style={{ width: 46, height: 46, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: withAlpha(illustrationColor("changes", colors), 0.12), borderWidth: 1, borderColor: withAlpha(illustrationColor("changes", colors), 0.22) }}>
+          <Illustration kind="changes" size={40} />
+        </View>
         <Text style={s.headerTitle}>{t("files.title")}</Text>
       </View>
 

@@ -50,6 +50,10 @@ function RootLayoutNav() {
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="login" options={{ headerShown: false, animation: "fade" }} />
+      {/* Flux de création : transition verticale distincte des écrans de consultation. */}
+      <Stack.Screen name="clone" options={{ headerShown: false, animation: "fade_from_bottom" }} />
+      <Stack.Screen name="new-repo" options={{ headerShown: false, animation: "fade_from_bottom" }} />
+      <Stack.Screen name="sync" options={{ headerShown: false, animation: "fade_from_bottom" }} />
     </Stack>
   );
 }

@@ -16,7 +16,9 @@ par un canal privé avant toute divulgation publique.
 - N'activez `insecureSsl` que pour un serveur de confiance avec certificat auto-signé.
 - Préférez HTTPS pour les remotes ; les identifiants ne doivent jamais être placés dans une URL
   destinée à être conservée dans la configuration Git.
-- Protégez les secrets de signature Android dans les secrets GitHub Actions, jamais dans le dépôt.
+- Protégez les secrets de signature Android dans les secrets GitHub Actions, jamais dans le dépôt. Le workflow refuse maintenant de publier une release sans keystore de production et sans mots de passe/alias complets.
+- Le serveur statique ne doit être exposé que derrière un proxy qui remplace `X-Forwarded-Proto` par une valeur fiable (`http` ou `https`). `X-Forwarded-Host` n'est pas utilisé pour construire les liens.
+- Les dépendances `catalog:` inconnues font échouer la préparation CI : ne remplacez jamais une dépendance non résolue par `latest` sans revue.
 - Vérifiez l'historique Git avant de rendre un dépôt public : supprimer un secret du dernier commit
   ne l'efface pas des commits antérieurs.
 

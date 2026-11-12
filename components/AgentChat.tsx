@@ -128,7 +128,7 @@ function AgentChatInner({ id, prompt, embedded, onPickRepo }: ChatProps) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <AppBackground />
-        <ScreenHeader title={t("ai.assistant")} noBack={embedded} />
+        <ScreenHeader art="ai" title={t("ai.assistant")} noBack={embedded} />
         <View style={{ padding: 24, gap: 14 }}>
           <Text style={{ color: colors.mutedForeground, fontSize: 13, lineHeight: 19 }}>{t("ai.notConfigured")}</Text>
           <Btn label={t("ai.settings")} icon="settings" variant="primary" onPress={() => router.push("/ai-settings" as any)} />
@@ -423,6 +423,7 @@ function AgentChatInner({ id, prompt, embedded, onPickRepo }: ChatProps) {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <AppBackground />
       <ScreenHeader
+        art="ai"
         title={t("ai.assistant")}
         noBack={embedded}
         subtitle={`${container.name} · ${aiLabel(settings)}`}

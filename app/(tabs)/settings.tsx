@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppBackground } from "@/components/AppBackground";
+import { Illustration, illustrationColor } from "@/components/Illustration";
 import { useAiSettings } from "@/components/AiUi";
 import { LanguagePicker } from "@/components/LanguagePicker";
 import { saveAi } from "@/utils/ai/settings";
@@ -23,7 +24,7 @@ import { useGitHub } from "@/context/GitHubContext";
 import { useI18n } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
 import { showConfirm } from "@/utils/dialogs";
-import { C } from "@/constants/colors";
+import { C, withAlpha } from "@/constants/colors";
 
 function Row({
   icon,
@@ -119,7 +120,10 @@ export default function SettingsScreen() {
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <AppBackground />
-      <View style={[s.header, { paddingTop: insets.top + webTop }]}>
+      <View style={[s.header, { paddingTop: insets.top + webTop, flexDirection: "row", alignItems: "center", gap: 10 }]}>
+        <View style={{ width: 46, height: 46, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: withAlpha(illustrationColor("settings", colors), 0.12), borderWidth: 1, borderColor: withAlpha(illustrationColor("settings", colors), 0.22) }}>
+          <Illustration kind="settings" size={40} />
+        </View>
         <Text style={s.headerTitle}>{t("settings.title")}</Text>
       </View>
 

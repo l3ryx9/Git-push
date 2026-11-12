@@ -131,7 +131,7 @@ export default function FilesScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppBackground />
-      <ScreenHeader title={path ? path.split("/").pop()! : c.name} subtitle={`/${path}`} right={<IconBtn icon="plus" onPress={addMenu} />} />
+      <ScreenHeader art="repos" title={path ? path.split("/").pop()! : c.name} subtitle={`/${path}`} right={<IconBtn icon="plus" onPress={addMenu} />} />
       {entries === null ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 30 }} />
       ) : (
