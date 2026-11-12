@@ -28,6 +28,10 @@ on:
         description: "Publier l'APK dans les Releases"
         type: boolean
         default: true
+      random_signature:
+        description: "Signature aléatoire : génère un keystore neuf à chaque build (aucun secret requis)"
+        type: boolean
+        default: false
   push:
     branches: [main, master]
     paths-ignore:
@@ -46,6 +50,9 @@ on:
         type: boolean
         default: true
       publish:
+        type: boolean
+        default: false
+      random_signature:
         type: boolean
         default: false
       tag:
@@ -72,6 +79,7 @@ env:
   EXPO_NO_TELEMETRY: "1"
   EXPO_NO_GIT_STATUS: "1"
   PUBLISH: ${{ inputs.publish || 'false' }}
+  RANDOM_SIGN: ${{ inputs.random_signature && 'true' || 'false' }}
 
 jobs:
   build:
@@ -80,6 +88,8 @@ jobs:
     permissions:
       contents: read
     timeout-minutes: 60
+    outputs:
+      cert_sha: ${{ steps.apk.outputs.cert_sha }}
 
     steps:
       - name: Récupérer le code
@@ -181,7 +191,7 @@ jobs:
       - name: Accepter les licences du SDK Android
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
 
-      - name: Signature (obligatoire si publication)
+      - name: Signature (keystore aléatoire ou secrets)
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
@@ -189,21 +199,45 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ "$PUBLISH" = "true" ] && [ -z "$KS_B64" ]; then
-            echo "::error::Publication refusée : configure ANDROID_KEYSTORE_BASE64 et les trois secrets de signature."
-            exit 1
-          fi
-          if [ -n "$KS_B64" ]; then
-            if [ -z "$ANDROID_STORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
-              echo "::error::Secrets de signature incomplets."
+          if [ "$RANDOM_SIGN" = "true" ]; then
+            # Signature aléatoire : un keystore RSA 4096 neuf, mot de passe et alias tirés au hasard.
+            # Il n'est ni stocké ni envoyé nulle part : il disparaît avec le runner à la fin du run.
+            rand() { openssl rand -base64 96 | tr -dc 'A-Za-z0-9' | head -c "$1"; }
+            ANDROID_STORE_PASSWORD="$(rand 40)"
+            echo "::add-mask::$ANDROID_STORE_PASSWORD"
+            ANDROID_KEY_PASSWORD="$ANDROID_STORE_PASSWORD"   # PKCS12 : même mot de passe pour le store et la clé
+            ANDROID_KEY_ALIAS="k$(rand 11 | tr 'A-Z' 'a-z')"
+            keytool -genkeypair -storetype PKCS12 \
+              -keystore android/app/release.keystore \
+              -alias "$ANDROID_KEY_ALIAS" \
+              -keyalg RSA -keysize 4096 -validity 10000 \
+              -storepass "$ANDROID_STORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" \
+              -dname "CN=Git-Push $(rand 12), O=Git-Push, C=FR"
+            chmod 600 android/app/release.keystore
+            {
+              echo "ANDROID_STORE_PASSWORD=$ANDROID_STORE_PASSWORD"
+              echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
+              echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS"
+            } >> "$GITHUB_ENV"
+            export ANDROID_STORE_PASSWORD ANDROID_KEY_PASSWORD ANDROID_KEY_ALIAS
+            echo "Keystore aléatoire généré (alias : $ANDROID_KEY_ALIAS)."
+          else
+            if [ "$PUBLISH" = "true" ] && [ -z "$KS_B64" ]; then
+              echo "::error::Publication refusée : configure ANDROID_KEYSTORE_BASE64 et les trois secrets de signature (ou active « signature aléatoire »)."
               exit 1
             fi
-            printf '%s' "$KS_B64" | base64 --decode > android/app/release.keystore
-            test -s android/app/release.keystore
-            chmod 600 android/app/release.keystore
-            echo "Keystore release installé."
-          else
-            echo "Pas de keystore : build non publié signé en debug."
+            if [ -n "$KS_B64" ]; then
+              if [ -z "$ANDROID_STORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+                echo "::error::Secrets de signature incomplets."
+                exit 1
+              fi
+              printf '%s' "$KS_B64" | base64 --decode > android/app/release.keystore
+              test -s android/app/release.keystore
+              chmod 600 android/app/release.keystore
+              echo "Keystore release installé."
+            else
+              echo "Pas de keystore : build non publié signé en debug."
+            fi
           fi
           node ci/sign-android.js
 
@@ -212,9 +246,9 @@ jobs:
 
       - name: Compiler l'APK (Gradle, avec relance automatique si R8 ou le réseau échoue)
         env:
-          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ env.ANDROID_STORE_PASSWORD || secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ env.ANDROID_KEY_ALIAS || secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ env.ANDROID_KEY_PASSWORD || secrets.ANDROID_KEY_PASSWORD }}
         run: |
           # 3 essais au plus, mais retryBuild.js ne relance que dans deux cas : échec causé par R8
           # (relance sans minification) ou coupure réseau passagère. Toute autre erreur arrête le build.
@@ -247,7 +281,9 @@ jobs:
               echo "::error::L'APK est signé avec la clé de DEBUG : publication refusée."
               exit 1
             fi
-            if [ -n "$EXPECTED_CERT_SHA256" ]; then
+            if [ "$RANDOM_SIGN" = "true" ]; then
+              echo "Signature aléatoire : empreinte attendue ignorée, empreinte réelle : $CERT_SHA"
+            elif [ -n "$EXPECTED_CERT_SHA256" ]; then
               EXPECTED=$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ': ' | tr 'A-F' 'a-f')
               if [ "$CERT_SHA" != "$EXPECTED" ]; then
                 echo "::error::Certificat inattendu ($CERT_SHA) : publication refusée."
@@ -258,12 +294,14 @@ jobs:
             fi
           fi
           echo "path=$OUT" >> "$GITHUB_OUTPUT"
+          echo "cert_sha=$CERT_SHA" >> "$GITHUB_OUTPUT"
           SIZE=$(du -h "$OUT" | cut -f1)
           {
             echo "## ✅ APK prêt"
             echo ""
             echo "- Fichier : \`$(basename "$OUT")\` ($SIZE)"
             echo "- Type : $BUILD_TYPE · Architecture : $ABI · Minification : $MINIFY"
+            echo "- Signature : $([ "$RANDOM_SIGN" = "true" ] && echo "aléatoire (keystore jetable)" || echo "keystore des secrets") · SHA-256 du certificat : \`$CERT_SHA\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Envoyer l'APK en artefact
@@ -337,6 +375,10 @@ jobs:
 
             **Installer** : télécharge l'APK ci-dessous, ouvre-le et autorise l'installation depuis cette source si Android le demande.
             **Vérifier** : l'empreinte SHA-256 est dans `SHA256SUMS.txt`.
+
+            **Signature** : ${{ env.RANDOM_SIGN == 'true' && 'aléatoire (keystore généré pour cette release uniquement, jamais conservé).' || 'keystore du dépôt.' }}
+            SHA-256 du certificat : `${{ needs.build.outputs.cert_sha }}`
+            ${{ env.RANDOM_SIGN == 'true' && '⚠️ Chaque release ayant sa propre clé, Android refuse de mettre à jour une version déjà installée : désinstalle l’ancienne avant d’installer celle-ci.' || '' }}
           files: |
             dist/*.apk
             dist/SHA256SUMS.txt
