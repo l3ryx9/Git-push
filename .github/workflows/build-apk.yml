@@ -1,0 +1,266 @@
+name: Build APK Android
+
+# Build 100 % local sur GitHub : expo prebuild + Gradle.
+# Aucun compte Expo, aucun token EXPO_TOKEN, aucun EAS.
+#
+# Lancer à la main : onglet Actions → « Build APK Android » → Run workflow.
+# L'APK se télécharge ensuite depuis l'onglet Releases (lien direct, pratique sur téléphone)
+# ou depuis les Artifacts du run.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "Type de build"
+        type: choice
+        options: [release, debug]
+        default: release
+      abi:
+        description: "Architecture (arm64-v8a = téléphones récents : build plus rapide et APK plus léger)"
+        type: choice
+        options: [arm64-v8a, all]
+        default: arm64-v8a
+      minify:
+        description: "Réduire / obfusquer le code natif (R8) : APK plus léger. Si R8 fait échouer le build, il est relancé automatiquement sans minification."
+        type: boolean
+        default: true
+      publish:
+        description: "Publier l'APK dans les Releases"
+        type: boolean
+        default: true
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  # Appelé par « Publier une release » (release.yml) : même build, puis publication dans les Releases.
+  workflow_call:
+    inputs:
+      build_type:
+        type: string
+        default: release
+      abi:
+        type: string
+        default: arm64-v8a
+      minify:
+        type: boolean
+        default: true
+      publish:
+        type: boolean
+        default: false
+      tag:
+        description: "Version de la release (ex : v1.0.0). Vide : tag build-N."
+        type: string
+        default: ""
+      prerelease:
+        type: boolean
+        default: false
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # nécessaire pour créer la Release
+
+env:
+  BUILD_TYPE: ${{ inputs.build_type || 'release' }}
+  ABI: ${{ inputs.abi || 'arm64-v8a' }}
+  # Sur un push (sans formulaire), la minification est active ; le build se relance seul sans elle si R8 échoue.
+  MINIFY: ${{ (github.event_name != 'workflow_dispatch' || inputs.minify) && 'true' || 'false' }}
+  CI: "1"
+  EXPO_NO_TELEMETRY: "1"
+  EXPO_NO_GIT_STATUS: "1"
+
+jobs:
+  build:
+    name: Compiler l'APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v5
+
+      - name: Installer Node.js 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Installer Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package.json') }}
+          restore-keys: npm-${{ runner.os }}-
+
+      - name: Préparer package.json pour la CI
+        run: node ci/prepare.js
+
+      - name: Installer les dépendances
+        run: |
+          npm install --no-audit --no-fund
+
+      - name: Tests unitaires
+        run: npm test
+
+      - name: Retirer les réglages liés à un compte Expo (owner, EAS, mises à jour OTA)
+        run: |
+          node -e '
+            const fs = require("fs");
+            const j = JSON.parse(fs.readFileSync("app.json", "utf8"));
+            const e = j.expo || {};
+            delete e.owner;
+            delete e.updates;
+            if (e.extra) {
+              delete e.extra.eas;
+              if (!Object.keys(e.extra).length) delete e.extra;
+            }
+            fs.writeFileSync("app.json", JSON.stringify(j, null, 2));
+            console.log("app.json nettoyé pour un build local");
+          '
+
+      - name: Générer le projet Android (expo prebuild)
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Régler Gradle (mémoire, architectures, minification, SDK)
+        run: |
+          P=android/gradle.properties
+          case "$ABI" in
+            all) ARCHS="armeabi-v7a,arm64-v8a,x86,x86_64" ;;
+            *) ARCHS="$ABI" ;;
+          esac
+          sed -i '/^org.gradle.jvmargs=/d;/^reactNativeArchitectures=/d;/^android.enableMinifyInReleaseBuilds=/d;/^android.enableShrinkResourcesInReleaseBuilds=/d' "$P"
+          {
+            echo ""
+            echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
+            echo "reactNativeArchitectures=$ARCHS"
+            echo "android.enableMinifyInReleaseBuilds=$MINIFY"
+            echo "android.enableShrinkResourcesInReleaseBuilds=$MINIFY"
+          } >> "$P"
+          # local.properties est prioritaire sur les variables d'environnement : Gradle trouve toujours le SDK.
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+          echo "--- gradle.properties ---"
+          cat "$P"
+
+      - name: Accepter les licences du SDK Android
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+
+      - name: Signature (keystore optionnel)
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > android/app/release.keystore
+            echo "Keystore release installé."
+          else
+            echo "Pas de keystore : l'APK sera signé avec la clé de debug (installable ; à remplacer pour le Play Store)."
+          fi
+          node ci/sign-android.js
+
+      - name: Cache Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Compiler l'APK (Gradle, avec relance automatique si R8 ou le réseau échoue)
+        env:
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          # 3 essais au plus, mais retryBuild.js ne relance que dans deux cas : échec causé par R8
+          # (relance sans minification) ou coupure réseau passagère. Toute autre erreur arrête le build.
+          export MAX_BUILD_ATTEMPTS=3
+          node ci/retryBuild.js
+
+      - name: Récupérer l'APK
+        id: apk
+        run: |
+          mkdir -p dist
+          APK=$(find "android/app/build/outputs/apk/$BUILD_TYPE" -name '*.apk' | head -n 1)
+          if [ -z "$APK" ]; then
+            echo "::error::Aucun APK trouvé dans android/app/build/outputs/apk/$BUILD_TYPE"
+            exit 1
+          fi
+          OUT="dist/Git-Push-$BUILD_TYPE-${{ github.run_number }}.apk"
+          cp "$APK" "$OUT"
+          echo "path=$OUT" >> "$GITHUB_OUTPUT"
+          SIZE=$(du -h "$OUT" | cut -f1)
+          {
+            echo "## ✅ APK prêt"
+            echo ""
+            echo "- Fichier : \`$(basename "$OUT")\` ($SIZE)"
+            echo "- Type : $BUILD_TYPE · Architecture : $ABI · Minification : $MINIFY"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Envoyer l'APK en artefact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Git-Push-${{ env.BUILD_TYPE }}-${{ github.run_number }}
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Empreinte SHA-256 de l'APK
+        if: inputs.publish
+        run: |
+          cd dist
+          sha256sum ./*.apk | sed 's# \./# #' > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Publier dans les Releases
+        if: inputs.publish
+        uses: softprops/action-gh-release@v2
+        with:
+          # Avec une version (v1.2.3) : release « propre » avec notes générées. Sinon : tag build-N.
+          tag_name: ${{ inputs.tag || format('build-{0}', github.run_number) }}
+          target_commitish: ${{ github.sha }}
+          # Entre guillemets : sans eux, le « # » ci-dessous serait pris pour un commentaire YAML et couperait l'expression.
+          name: "Git-Push ${{ inputs.tag || format('{0} #{1}', env.BUILD_TYPE, github.run_number) }}"
+          generate_release_notes: ${{ inputs.tag != '' }}
+          prerelease: ${{ inputs.prerelease || contains(inputs.tag, '-') }}
+          body: |
+            APK ${{ env.BUILD_TYPE }} · architecture ${{ env.ABI }} · commit ${{ github.sha }}
+
+            **Installer** : télécharge l'APK ci-dessous, ouvre-le et autorise l'installation depuis cette source si Android le demande.
+            **Vérifier** : l'empreinte SHA-256 est dans `SHA256SUMS.txt`.
+          files: |
+            ${{ steps.apk.outputs.path }}
+            dist/SHA256SUMS.txt
+
+      - name: Résumé des erreurs
+        if: failure()
+        run: |
+          {
+            echo "## ❌ Le build a échoué"
+            echo ""
+            echo "Copie les lignes ci-dessous pour les faire corriger :"
+            echo ""
+            echo '```'
+            shopt -s nullglob
+            LOGS=(ci/logs/build-attempt-*.log)
+            if [ ${#LOGS[@]} -gt 0 ]; then
+              grep -hE "^e: |error:|FAILURE:|What went wrong|Caused by|Execution failed|Unresolved reference|Could not resolve" "${LOGS[@]}" | tail -n 60 | cut -c1-300 || true
+            else
+              echo "(pas de log Gradle : l'échec vient d'une étape précédente, ouvre le journal de l'étape en rouge)"
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Envoyer les journaux de build
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-logs-${{ github.run_number }}
+          path: ci/logs
+          if-no-files-found: ignore
+          retention-days: 7
