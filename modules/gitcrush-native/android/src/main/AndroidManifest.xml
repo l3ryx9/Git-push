@@ -1,0 +1,54 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!-- Android 11+ : permet de lister les applications lançables (sélecteur d'applications
+       de la synchro à l'ouverture / fermeture) sans la permission QUERY_ALL_PACKAGES. -->
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.MAIN" />
+      <category android:name="android.intent.category.LAUNCHER" />
+    </intent>
+  </queries>
+
+  <application>
+
+    <!-- Tuile des Réglages rapides -->
+    <service
+      android:name="expo.modules.gitcrushnative.SyncTileService"
+      android:exported="true"
+      android:icon="@drawable/gitcrush_ic_sync"
+      android:label="@string/gitcrush_tile_label"
+      android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+      <intent-filter>
+        <action android:name="android.service.quicksettings.action.QS_TILE" />
+      </intent-filter>
+    </service>
+
+    <!-- Widget de l'écran d'accueil -->
+    <receiver
+      android:name="expo.modules.gitcrushnative.SyncWidgetProvider"
+      android:exported="true"
+      android:label="@string/gitcrush_widget_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/gitcrush_widget_info" />
+    </receiver>
+
+    <!-- Service d'accessibilité : détecte uniquement l'application au premier plan -->
+    <service
+      android:name="expo.modules.gitcrushnative.WatchAccessibilityService"
+      android:exported="true"
+      android:label="@string/gitcrush_accessibility_label"
+      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+      <intent-filter>
+        <action android:name="android.accessibilityservice.AccessibilityService" />
+      </intent-filter>
+      <meta-data
+        android:name="android.accessibilityservice"
+        android:resource="@xml/gitcrush_accessibility_config" />
+    </service>
+
+  </application>
+</manifest>
